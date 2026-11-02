@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# Environment and Secrets (Never commit credentials)
+.env
+.env.*
+!.env.example
+
+# Local storage, databases and uploads
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+data/
+output/
+/results/
+/datasets/
+
+# Model checkpoints & heavy weights
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.xml
+*.bin
+training/results/
+
+# Vercel & Node
+.vercel/
+node_modules/
+
+# Logs & Testing
+*.log
+lightning_logs/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

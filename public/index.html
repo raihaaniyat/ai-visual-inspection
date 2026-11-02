@@ -1,0 +1,2153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspectra — Visual Quality & Assembly Inspection Platform</title>
+
+  <!-- Prevent theme flicker before render -->
+  <script>
+    (function() {
+      try {
+        const saved = localStorage.getItem('inspectra-theme');
+        const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (systemDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+
+  <!-- Preload both logo variants for zero-overhead instant theme switching -->
+  <link rel="preload" href="/assets/inspectra-light-mode.png" as="image">
+  <link rel="preload" href="/assets/inspectra-dark-mode.png" as="image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* =========================================================================
+       1. DUAL-THEME INDUSTRIAL DESIGN SYSTEM
+       ========================================================================= */
+    :root, [data-theme="light"] {
+      --theme-name: "light";
+      --bg-base: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: #f1f5f9;
+      --bg-card-hover: #e2e8f0;
+      --bg-input: #ffffff;
+      --border: #e2e8f0;
+      --border-subtle: #cbd5e1;
+      --border-focus: #0ea5e9;
+
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-faint: #94a3b8;
+
+      --accent: #0284c7;
+      --accent-hover: #0369a1;
+      --accent-bg: rgba(2, 132, 199, 0.08);
+      --accent-border: #bae6fd;
+      --accent-text: #0369a1;
+
+      --pass: #059669;
+      --pass-bg: #ecfdf5;
+      --pass-border: #a7f3d0;
+      --pass-text: #047857;
+
+      --reject: #dc2626;
+      --reject-bg: #fef2f2;
+      --reject-border: #fecaca;
+      --reject-text: #b91c1c;
+
+      --review: #d97706;
+      --review-bg: #fffbeb;
+      --review-border: #fde68a;
+      --review-text: #b45309;
+
+      --viewport-bg: #0f172a; /* keep dark backdrop for camera viewports so photograph contrast is always preserved */
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
+      --shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.12);
+      --header-bg: rgba(255, 255, 255, 0.94);
+      --table-header-bg: rgba(241, 245, 249, 0.85);
+
+      --chart-bar-bg: #e2e8f0;
+      --chart-pass-bar: rgba(5, 150, 105, 0.85);
+      --chart-axis: #cbd5e1;
+      --chart-text: #64748b;
+    }
+
+    [data-theme="dark"] {
+      --theme-name: "dark";
+      --bg-base: #090d16;
+      --bg-surface: #121826;
+      --bg-card: #182032;
+      --bg-card-hover: #1f2b42;
+      --bg-input: #0f1523;
+      --border: #243047;
+      --border-subtle: #1c273b;
+      --border-focus: #38bdf8;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --accent-bg: rgba(56, 189, 248, 0.12);
+      --accent-border: #0369a1;
+      --accent-text: #38bdf8;
+
+      --pass: #10b981;
+      --pass-bg: rgba(16, 185, 129, 0.12);
+      --pass-border: #059669;
+      --pass-text: #34d399;
+
+      --reject: #f43f5e;
+      --reject-bg: rgba(244, 63, 94, 0.12);
+      --reject-border: #e11d48;
+      --reject-text: #fb7185;
+
+      --review: #f59e0b;
+      --review-bg: rgba(245, 158, 11, 0.12);
+      --review-border: #d97706;
+      --review-text: #fbbf24;
+
+      --viewport-bg: #06090e;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+      --header-bg: rgba(18, 24, 38, 0.94);
+      --table-header-bg: rgba(18, 24, 38, 0.6);
+
+      --chart-bar-bg: #1e293b;
+      --chart-pass-bar: rgba(16, 185, 129, 0.75);
+      --chart-axis: #243047;
+      --chart-text: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    /* =========================================================================
+       2. TOP BAR & ZERO-OVERHEAD LOGO SWITCHING
+       ========================================================================= */
+    header {
+      background: var(--header-bg);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.65rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    /* Zero-overhead logo switching driven strictly by CSS display attribute */
+    .brand-logo-img {
+      height: 38px;
+      width: auto;
+      max-height: 40px;
+      object-fit: contain;
+      vertical-align: middle;
+      display: none;
+    }
+    :root .logo-light, [data-theme="light"] .logo-light {
+      display: block !important;
+    }
+    :root .logo-dark, [data-theme="light"] .logo-dark {
+      display: none !important;
+    }
+    [data-theme="dark"] .logo-dark {
+      display: block !important;
+    }
+    [data-theme="dark"] .logo-light {
+      display: none !important;
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      gap: 0.4rem;
+      background: var(--bg-card);
+      padding: 0.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .nav-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: all 0.15s ease;
+    }
+    .nav-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.85;
+    }
+    .nav-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-card-hover);
+    }
+    .nav-btn.active {
+      color: var(--accent);
+      background: var(--bg-surface);
+      border-color: var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .nav-btn.active svg {
+      opacity: 1;
+      stroke: var(--accent);
+    }
+
+    /* Header Actions: Theme Toggle & Status */
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .theme-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .theme-toggle-btn:hover {
+      background: var(--bg-card-hover);
+      color: var(--text-main);
+      border-color: var(--border-focus);
+    }
+    .theme-toggle-btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .icon-sun { display: none; }
+    .icon-moon { display: block; }
+    [data-theme="light"] .icon-sun { display: block; }
+    [data-theme="light"] .icon-moon { display: none; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 0.4rem 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      color: var(--text-muted);
+    }
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--pass);
+      box-shadow: 0 0 8px var(--pass);
+    }
+
+    /* =========================================================================
+       3. MAIN LAYOUT & PANELS
+       ========================================================================= */
+    main {
+      flex: 1;
+      max-width: 1560px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .tab-pane.active {
+      display: flex;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-title svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--accent);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .card-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.15rem;
+    }
+
+    /* Grids */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+    .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
+
+    @media (max-width: 1100px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .grid-6 { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .grid-4 { grid-template-columns: 1fr; }
+      .grid-6 { grid-template-columns: repeat(2, 1fr); }
+      main { padding: 1rem; }
+      header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.55rem 1.15rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent-border);
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 2px 10px rgba(14, 165, 233, 0.25);
+    }
+    [data-theme="light"] .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    [data-theme="dark"] .btn-primary {
+      color: #041019;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-pass {
+      background: var(--pass-bg);
+      border-color: var(--pass-border);
+      color: var(--pass-text);
+    }
+    .btn-pass:hover { background: rgba(16, 185, 129, 0.2); }
+
+    .btn-reject {
+      background: var(--reject-bg);
+      border-color: var(--reject-border);
+      color: var(--reject-text);
+    }
+    .btn-reject:hover { background: rgba(244, 63, 94, 0.2); }
+
+    .btn-review {
+      background: var(--review-bg);
+      border-color: var(--review-border);
+      color: var(--review-text);
+    }
+    .btn-review:hover { background: rgba(245, 158, 11, 0.2); }
+
+    select, input, textarea {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 0.55rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s ease, background-color 0.2s ease, color 0.2s ease;
+    }
+    select:focus, input:focus, textarea:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* KPI Metrics Cards */
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      position: relative;
+      overflow: hidden;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+    .kpi-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--border);
+    }
+    .kpi-card.pass::before { background: var(--pass); }
+    .kpi-card.reject::before { background: var(--reject); }
+    .kpi-card.review::before { background: var(--review); }
+    .kpi-card.accent::before { background: var(--accent); }
+    .kpi-card.error::before { background: var(--text-faint); }
+
+    .kpi-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .kpi-value {
+      font-size: 1.65rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+    }
+    .kpi-sub {
+      font-size: 0.75rem;
+      color: var(--text-faint);
+    }
+
+    /* Verdict Banner */
+    .verdict-banner {
+      border-radius: 10px;
+      padding: 1.25rem 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      animation: fadeIn 0.3s ease;
+    }
+    .verdict-banner.PASS {
+      background: var(--pass-bg);
+      border: 1px solid var(--pass-border);
+      color: var(--pass-text);
+    }
+    .verdict-banner.REJECT {
+      background: var(--reject-bg);
+      border: 1px solid var(--reject-border);
+      color: var(--reject-text);
+    }
+    .verdict-banner.REVIEW {
+      background: var(--review-bg);
+      border: 1px solid var(--review-border);
+      color: var(--review-text);
+    }
+    .verdict-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .verdict-title svg {
+      width: 28px;
+      height: 28px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2.2;
+    }
+    .verdict-detail {
+      font-size: 0.88rem;
+      opacity: 0.95;
+      margin-top: 0.25rem;
+    }
+
+    /* Image Viewport & Canvas */
+    .image-viewport {
+      width: 100%;
+      height: 440px;
+      background: var(--viewport-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    .image-viewport img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      user-select: none;
+    }
+    .viewport-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      cursor: crosshair;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+    }
+    th, td {
+      padding: 0.65rem 0.85rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--text-muted);
+      font-weight: 600;
+      background: var(--table-header-bg);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    tr:hover td {
+      background: var(--bg-card);
+    }
+
+    /* Status Tags */
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      font-weight: 600;
+      display: inline-block;
+      text-transform: uppercase;
+    }
+    .tag.pass, .tag.satisfied { background: var(--pass-bg); color: var(--pass-text); border: 1px solid var(--pass-border); }
+    .tag.reject, .tag.failed { background: var(--reject-bg); color: var(--reject-text); border: 1px solid var(--reject-border); }
+    .tag.review, .tag.uncertain { background: var(--review-bg); color: var(--review-text); border: 1px solid var(--review-border); }
+    .tag.neutral { background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Visual Style Legend Pill Box */
+    .style-legend-box {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-size: 0.78rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-muted);
+    }
+    .legend-box-dashed {
+      width: 16px;
+      height: 12px;
+      border: 2px dashed var(--text-faint);
+      border-radius: 2px;
+    }
+    .legend-box-solid {
+      width: 16px;
+      height: 12px;
+      border: 2px solid var(--pass);
+      background: var(--pass-bg);
+      border-radius: 2px;
+    }
+
+    /* Modal Lightbox */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.active { display: flex; }
+    .modal-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-width: 1100px;
+      width: 95%;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Trend Chart Container */
+    .trend-chart-container {
+      width: 100%;
+      height: 220px;
+      position: relative;
+    }
+
+    /* Synthesized Empty States */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--text-faint);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+    .empty-state svg {
+      width: 52px;
+      height: 52px;
+      stroke: var(--text-faint);
+      opacity: 0.5;
+      fill: none;
+      stroke-width: 1.5;
+    }
+    .empty-state-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .empty-state-desc {
+      font-size: 0.8rem;
+      color: var(--text-faint);
+      max-width: 380px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header with Instant Dual-Logo Switcher -->
+  <header>
+    <a href="#" class="brand-container" aria-label="Inspectra Platform">
+      <!-- Zero-overhead instant logo switching -->
+      <img src="/assets/inspectra-light-mode.png" alt="Inspectra" class="brand-logo-img logo-light" width="126" height="42">
+      <img src="/assets/inspectra-dark-mode.png" alt="Inspectra" class="brand-logo-img logo-dark" width="126" height="42">
+    </a>
+
+    <!-- 4 Primary Navigation Tabs -->
+    <nav class="nav-tabs" aria-label="Main Navigation">
+      <button class="nav-btn active" data-tab="tab-overview">
+        <!-- Synthesized Dashboard Speedo SVG -->
+        <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="m12 12 4-4"/><circle cx="12" cy="12" r="2"/></svg>
+        <span>Overview</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-inspect">
+        <!-- Synthesized Reticle Crosshair SVG -->
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+        <span>Inspection</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-profiles">
+        <!-- Synthesized Blueprint Layers SVG -->
+        <svg viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+        <span>Profiles & References</span>
+      </button>
+      <button class="nav-btn" data-tab="tab-history">
+        <!-- Synthesized Audit Clock SVG -->
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>History</span>
+      </button>
+    </nav>
+
+    <!-- Header Actions: Theme Toggle & Operational Status -->
+    <div class="header-actions">
+      <!-- Dark / Light Mode Switcher Button -->
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Toggle Dark/Light Mode" aria-label="Toggle Theme">
+        <!-- Sun SVG (shows in light mode) -->
+        <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        <!-- Moon SVG (shows in dark mode) -->
+        <svg class="icon-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+      </button>
+
+      <div class="status-pill">
+        <div class="pill-dot" id="systemStatusDot"></div>
+        <span id="systemStatusText">Operational</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ========================================================================= -->
+    <!-- 1. OVERVIEW TAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane active" id="tab-overview">
+
+      <!-- Top Filter & Time Horizon Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h2 style="font-size:1.35rem; font-weight:700; letter-spacing:-0.01em;">Operational Summary</h2>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Real production telemetry and ground truth validation metrics.</p>
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <label style="font-size:0.8rem; color:var(--text-muted); font-weight:600;">Timeframe:</label>
+          <select id="statDaysFilter" style="width:140px;" onchange="loadOperationalStatistics()">
+            <option value="">All Time</option>
+            <option value="30">Last 30 Days</option>
+            <option value="7">Last 7 Days</option>
+            <option value="1">Last 24 Hours</option>
+          </select>
+          <button class="btn" onclick="loadOperationalStatistics()">
+            <!-- Synthesized Refresh Sync SVG -->
+            <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Metrics Cards (6-Grid) -->
+      <div class="grid-6">
+        <div class="kpi-card accent">
+          <span class="kpi-label">Completed Inspections</span>
+          <span class="kpi-value" id="kpiCompleted">0</span>
+          <span class="kpi-sub" id="kpiTotalAttempts">Denominator: 0 attempts</span>
+        </div>
+        <div class="kpi-card pass">
+          <span class="kpi-label">PASS Rate</span>
+          <span class="kpi-value" id="kpiPassRate">-%</span>
+          <span class="kpi-sub" id="kpiPassCount">0 units passed</span>
+        </div>
+        <div class="kpi-card reject">
+          <span class="kpi-label">REJECT Rate</span>
+          <span class="kpi-value" id="kpiRejectRate">-%</span>
+          <span class="kpi-sub" id="kpiRejectCount">0 units rejected</span>
+        </div>
+        <div class="kpi-card review">
+          <span class="kpi-label">REVIEW Rate</span>
+          <span class="kpi-value" id="kpiReviewRate">-%</span>
+          <span class="kpi-sub" id="kpiReviewCount">0 flagged for review</span>
+        </div>
+        <div class="kpi-card error">
+          <span class="kpi-label">Processing Errors</span>
+          <span class="kpi-value" id="kpiErrors">0</span>
+          <span class="kpi-sub">Excludes product defects</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Average Latency</span>
+          <span class="kpi-value" id="kpiAvgLatency">0 ms</span>
+          <span class="kpi-sub" id="kpiInferenceLatency">Inference: 0 ms</span>
+        </div>
+      </div>
+
+      <!-- Charts & Tables Grid -->
+      <div class="grid-2">
+        <!-- Inspection Volume & Verdict Trends -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                <span>Inspection Volume & Verdict Trends</span>
+              </div>
+              <div class="card-subtitle">Production throughput and decision distribution by date</div>
+            </div>
+          </div>
+          <div class="trend-chart-container" id="trendChartBox">
+            <!-- Dynamically populated or synthesized empty state -->
+          </div>
+        </div>
+
+        <!-- Frequently Failed Inspection Criteria -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><polygon points="12 2 2 22 22 22 12 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span>Frequently Failed Checks</span>
+              </div>
+              <div class="card-subtitle">Highest frequency component defects and assembly deviations</div>
+            </div>
+          </div>
+          <div id="failedChecksTableBox" style="max-height:220px; overflow-y:auto;">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Ground Truth Validation & Benchmarking Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Independently Verified Ground Truth Benchmarking</span>
+            </div>
+            <div class="card-subtitle">Accuracy, False Accept Rate (FAR), and False Reject Rate (FRR) are calculated strictly on operator-verified records. Unlabelled production records are excluded.</div>
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:0.5rem;">
+          <div class="kpi-card pass">
+            <span class="kpi-label">Verified Accuracy</span>
+            <span class="kpi-value" id="gtAccuracy">-%</span>
+            <span class="kpi-sub" id="gtSampleCount">0 labelled records</span>
+          </div>
+          <div class="kpi-card reject">
+            <span class="kpi-label">False Accept Rate (FAR)</span>
+            <span class="kpi-value" id="gtFAR">-%</span>
+            <span class="kpi-sub" id="gtFACount">Defects accepted as PASS</span>
+          </div>
+          <div class="kpi-card review">
+            <span class="kpi-label">False Reject Rate (FRR)</span>
+            <span class="kpi-value" id="gtFRR">-%</span>
+            <span class="kpi-sub" id="gtFRCount">Good boards rejected</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Ground Truth Coverage</span>
+            <span class="kpi-value" id="gtCoverage">-%</span>
+            <span class="kpi-sub" id="gtCoverageDetail">0 labelled / 0 total</span>
+          </div>
+        </div>
+
+        <!-- Confusion Matrix Table -->
+        <div style="margin-top:0.75rem;">
+          <div style="font-size:0.85rem; font-weight:600; margin-bottom:0.4rem; color:var(--text-muted);">Confusion Matrix (Ground Truth vs. System Decision)</div>
+          <table>
+            <thead>
+              <tr>
+                <th>True State (Ground Truth)</th>
+                <th>System PASS</th>
+                <th>System REJECT</th>
+                <th>System REVIEW</th>
+              </tr>
+            </thead>
+            <tbody id="gtConfusionMatrixBody">
+              <tr><td>Ground Truth PASS</td><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>Ground Truth REJECT</td><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>Ground Truth REVIEW</td><td>0</td><td>0</td><td>0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Inspections Quick List -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span>Recent Inspection Runs</span>
+            </div>
+            <div class="card-subtitle">Latest processed assemblies and decision logs</div>
+          </div>
+          <button class="btn" onclick="switchTab('tab-history')">
+            <span>View Full History</span>
+            <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Inspection ID</th>
+                <th>Profile & Version</th>
+                <th>Verdict</th>
+                <th>State</th>
+                <th>Total Latency</th>
+                <th>Ground Truth</th>
+              </tr>
+            </thead>
+            <tbody id="overviewRecentInspectionsBody">
+              <tr><td colspan="7" class="empty-state">No inspections recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- 2. INSPECTION TAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="tab-inspect">
+
+      <!-- Profile Selector & Visual Style Legend Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div style="display:flex; align-items:center; gap:0.75rem; flex:1; min-width:280px; max-width:480px;">
+          <label style="font-size:0.85rem; font-weight:600; white-space:nowrap;">Active Profile:</label>
+          <select id="inspectProfileSelect" onchange="onInspectProfileChange()">
+            <option value="">Loading profiles...</option>
+          </select>
+        </div>
+
+        <!-- Strict Visual Style Legend (Separating Expected Regions from Detections) -->
+        <div class="style-legend-box">
+          <span style="font-weight:600; color:var(--text-main);">Visual Legend:</span>
+          <div class="legend-item">
+            <div class="legend-box-dashed"></div>
+            <span>Dashed Box: Expected Region</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-box-solid"></div>
+            <span>Solid Box: Observed Detection</span>
+          </div>
+          <div class="legend-item">
+            <span class="tag satisfied" style="font-size:0.7rem; padding:0.1rem 0.35rem;">PASS</span>
+            <span class="tag failed" style="font-size:0.7rem; padding:0.1rem 0.35rem;">REJECT</span>
+            <span class="tag uncertain" style="font-size:0.7rem; padding:0.1rem 0.35rem;">REVIEW</span>
+            <span>Check Status</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Visual Inspection Viewports (Side-by-Side) -->
+      <div class="grid-2">
+        <!-- Approved Reference Workpiece Viewport -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>Approved Reference Workpiece</span>
+              </div>
+              <div class="card-subtitle" id="refImageSubtitle">Baseline Golden Reference</div>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn" onclick="openLightbox('ref')">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                <span>Zoom</span>
+              </button>
+            </div>
+          </div>
+          <div class="image-viewport" id="refViewport">
+            <img id="refImageDisplay" src="" alt="Approved Reference" style="display:none;">
+            <!-- Synthesized Reference Calibration Target SVG Empty State -->
+            <div class="empty-state" id="refEmptyPlaceholder">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><circle cx="12" cy="12" r="3"/></svg>
+              <div class="empty-state-title">No Golden Reference Assigned</div>
+              <div class="empty-state-desc">Upload an approved reference photograph in Profiles & References to enable inspection.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Production Inspection Photograph Viewport -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <span>Current Production Photograph</span>
+              </div>
+              <div class="card-subtitle">Workpiece under inspection</div>
+            </div>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn" id="btnInspectLightbox" onclick="openLightbox('test')" style="display:none;">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Zoom</span>
+              </button>
+              <button class="btn" onclick="document.getElementById('testPhotoInput').click()">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Upload Image</span>
+              </button>
+              <input type="file" id="testPhotoInput" accept="image/*" style="display:none;" onchange="onTestPhotoSelected(event)">
+            </div>
+          </div>
+          <div class="image-viewport" id="testViewport">
+            <img id="testImageDisplay" src="" alt="Test Image" style="display:none;">
+            <canvas class="viewport-canvas" id="testCanvas" style="display:none;"></canvas>
+            <!-- Synthesized Aperture Camera SVG Empty State -->
+            <div class="empty-state" id="testEmptyPlaceholder">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><circle cx="12" cy="10" r="3"/></svg>
+              <div class="empty-state-title">Awaiting Workpiece Photograph</div>
+              <div class="empty-state-desc">Drag & drop or upload a photograph of the assembly to run automated component verification.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface); padding:1rem 1.5rem; border:1px solid var(--border); border-radius:10px; box-shadow:var(--shadow-sm);">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+          <svg style="width:18px; height:18px; stroke:var(--accent); fill:none; stroke-width:2;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <span style="font-size:0.85rem; color:var(--text-muted);" id="inspectionStateNotice">Ready to inspect workpiece</span>
+        </div>
+        <div style="display:flex; gap:0.75rem;">
+          <button class="btn" id="btnResetCorners" onclick="resetWorkpieceCorners()" style="display:none;">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <span>Reset Pins</span>
+          </button>
+          <button class="btn btn-primary" id="btnRunInspection" onclick="executeInspection()" disabled>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span id="btnRunText">Run Inspection</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Inspection Results Area (Populates after Run Inspection) -->
+      <div id="inspectionResultsArea" style="display:none; flex-direction:column; gap:1.5rem;">
+
+        <!-- Large Verdict Banner -->
+        <div class="verdict-banner" id="verdictBanner">
+          <div>
+            <div class="verdict-title" id="verdictTitle">
+              <svg id="verdictIcon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <span id="verdictText">PASS</span>
+            </div>
+            <div class="verdict-detail" id="verdictReason">All components verified successfully.</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8;">Inspection ID</div>
+            <div style="font-family:'JetBrains Mono', monospace; font-size:0.95rem; font-weight:600;" id="verdictId">insp_1234</div>
+          </div>
+        </div>
+
+        <!-- Quality & Alignment Verification Badges -->
+        <div class="grid-4">
+          <div class="kpi-card" id="cardGeoAlign">
+            <span class="kpi-label">Workpiece Geometric Alignment</span>
+            <span class="kpi-value" style="font-size:1.15rem;" id="valGeoAlign">Verified OK</span>
+            <span class="kpi-sub">Planar homography transformation</span>
+          </div>
+          <div class="kpi-card" id="cardImageQuality">
+            <span class="kpi-label">Image Preparation Quality</span>
+            <span class="kpi-value" style="font-size:1.15rem;" id="valImageQuality">Sharp / Exposed</span>
+            <span class="kpi-sub">Illumination & clarity checks</span>
+          </div>
+          <div class="kpi-card" id="cardIdentity">
+            <span class="kpi-label">Reference Identity Match</span>
+            <span class="kpi-value" style="font-size:1.15rem;" id="valIdentity">Confirmed Match</span>
+            <span class="kpi-sub">Approved reference baseline</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Processing Time</span>
+            <span class="kpi-value" style="font-size:1.15rem;" id="valLatency">0 ms</span>
+            <span class="kpi-sub" id="valInfLatency">Inference: 0 ms</span>
+          </div>
+        </div>
+
+        <!-- Inspection View Modes: Annotated Overlays & Difference Heatmap -->
+        <div class="grid-2">
+          <!-- Annotated Detection Overlay -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">
+                  <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                  <span>Annotated Workpiece Findings</span>
+                </div>
+                <div class="card-subtitle">Solid boxes: detections; Dashed boxes: expected regions</div>
+              </div>
+              <button class="btn" onclick="openLightbox('annotated')">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Full Resolution</span>
+              </button>
+            </div>
+            <div class="image-viewport">
+              <img id="annotatedDisplay" src="" alt="Annotated Overlays">
+            </div>
+          </div>
+
+          <!-- Reference Difference Map -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></svg>
+                  <span>Reference Difference Map</span>
+                </div>
+                <div class="card-subtitle" id="diffSubtitle">Illumination-normalized Turbo heatmap inside workpiece area</div>
+              </div>
+              <button class="btn" onclick="openLightbox('diff')">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Full Resolution</span>
+              </button>
+            </div>
+            <div class="image-viewport">
+              <img id="diffDisplay" src="" alt="Reference Difference Map">
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between;" id="diffNoticeBox">
+              <span>Heatmap intensity represents residual appearance disparity. Edge contours are not automatically treated as component defects.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Component Findings Checklist Table -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>Component Findings & Acceptance Criteria</span>
+              </div>
+              <div class="card-subtitle">Detailed verification report for each configured item</div>
+            </div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Component / Check Description</th>
+                  <th>Status</th>
+                  <th>Check Type</th>
+                  <th>Requirement</th>
+                  <th>Observed State</th>
+                  <th>Coordinate Space</th>
+                </tr>
+              </thead>
+              <tbody id="findingsTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Operator Ground Truth Recording -->
+        <div class="card" style="border:1px solid var(--border-focus);">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                <span>Operator Ground Truth Verification</span>
+              </div>
+              <div class="card-subtitle">Record true assembly outcome for continuous accuracy benchmarking (isolated from model inference inputs)</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+            <span style="font-size:0.85rem; font-weight:600;">Verified Ground Truth Verdict:</span>
+            <div style="display:flex; gap:0.5rem;">
+              <button class="btn btn-pass" onclick="recordGroundTruth('PASS')">Verified PASS</button>
+              <button class="btn btn-reject" onclick="recordGroundTruth('REJECT')">Verified REJECT</button>
+              <button class="btn btn-review" onclick="recordGroundTruth('REVIEW')">Verified REVIEW</button>
+            </div>
+            <input type="text" id="gtNotesInput" placeholder="Optional operator notes (e.g., lower screw missing, shadow glare)" style="flex:1; min-width:200px;">
+            <span id="gtStatusMessage" style="font-size:0.8rem; color:var(--pass); font-weight:600;"></span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- 3. PROFILES & REFERENCES TAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="tab-profiles">
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h2 style="font-size:1.35rem; font-weight:700;">Inspection Profiles</h2>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Manage approved reference baselines, workpiece boundaries, and acceptance criteria.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNewProfileModal()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>Create New Profile</span>
+        </button>
+      </div>
+
+      <!-- Profiles List Table -->
+      <div class="card">
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Profile Name</th>
+                <th>Version</th>
+                <th>Reference Status</th>
+                <th>Checklist Items</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="profilesTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ========================================================================= -->
+    <!-- 4. HISTORY TAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="tab-history">
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <h2 style="font-size:1.35rem; font-weight:700;">Inspection History</h2>
+          <p style="font-size:0.85rem; color:var(--text-muted);">Audit log of all production inspections, ground truth labels, and failure categories.</p>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn" onclick="exportData('csv')">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export CSV</span>
+          </button>
+          <button class="btn" onclick="exportData('json')">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Export JSON</span>
+          </button>
+          <button class="btn" onclick="loadHistory()">
+            <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- History Table Filter -->
+      <div class="card">
+        <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+          <div style="flex:1; min-width:180px;">
+            <input type="text" id="historySearch" placeholder="Search by ID or profile..." oninput="filterHistoryTable()">
+          </div>
+          <div style="width:160px;">
+            <select id="historyVerdictFilter" onchange="filterHistoryTable()">
+              <option value="">All Verdicts</option>
+              <option value="PASS">PASS</option>
+              <option value="REJECT">REJECT</option>
+              <option value="REVIEW">REVIEW</option>
+            </select>
+          </div>
+          <div style="width:160px;">
+            <select id="historyStateFilter" onchange="filterHistoryTable()">
+              <option value="">All States</option>
+              <option value="COMPLETED">Completed Only</option>
+              <option value="ERROR">Errors Only</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto; margin-top:0.75rem;">
+          <table>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Inspection ID</th>
+                <th>Profile</th>
+                <th>Verdict</th>
+                <th>State / Failure</th>
+                <th>Reason / Issue</th>
+                <th>Alignment</th>
+                <th>Latency</th>
+                <th>Ground Truth</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: IMAGE LIGHTBOX ZOOM -->
+  <!-- ========================================================================= -->
+  <div class="modal" id="lightboxModal" onclick="if(event.target === this) closeLightbox()">
+    <div class="modal-box" style="max-width:1200px;">
+      <div class="card-header">
+        <div class="card-title" id="lightboxTitle">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>High-Resolution Workpiece View</span>
+        </div>
+        <button class="btn" onclick="closeLightbox()">Close</button>
+      </div>
+      <div style="width:100%; height:75vh; background:var(--viewport-bg); border:1px solid var(--border); border-radius:8px; overflow:auto; display:flex; align-items:center; justify-content:center;">
+        <img id="lightboxImage" src="" alt="High Resolution" style="max-width:none; transition:transform 0.2s ease;">
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.8rem; color:var(--text-muted);">Use browser scroll or trackpad gestures to inspect fine component placement.</span>
+        <div style="display:flex; gap:0.5rem;">
+          <button class="btn" onclick="adjustLightboxZoom(0.8)">- Zoom</button>
+          <button class="btn" onclick="adjustLightboxZoom(1.0)">100%</button>
+          <button class="btn" onclick="adjustLightboxZoom(1.25)">+ Zoom</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: CREATE / EDIT PROFILE -->
+  <!-- ========================================================================= -->
+  <div class="modal" id="profileModal" onclick="if(event.target === this) closeProfileModal()">
+    <div class="modal-box" style="max-width:700px;">
+      <div class="card-header">
+        <div class="card-title">
+          <svg viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5z"/></svg>
+          <span>Create Inspection Profile</span>
+        </div>
+        <button class="btn" onclick="closeProfileModal()">Close</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:1rem;">
+        <div>
+          <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Profile Name</label>
+          <input type="text" id="newProfName" placeholder="e.g. PCB Mainboard Fastener Assembly">
+        </div>
+        <div>
+          <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Description</label>
+          <input type="text" id="newProfDesc" placeholder="e.g. 6-point fastener and connector presence verification">
+        </div>
+        <div>
+          <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Approved Golden Reference Photograph</label>
+          <input type="file" id="newProfFile" accept="image/*">
+          <div style="font-size:0.75rem; color:var(--text-faint); margin-top:0.25rem;">Replacing a reference increments profile version and invalidates old cached inspection results.</div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+          <button class="btn" onclick="closeProfileModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitCreateProfile()">Save Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- APPLICATION SCRIPT -->
+  <!-- ========================================================================= -->
+  <script>
+    // State
+    let currentProfile = null;
+    let profilesList = [];
+    let currentInspection = null;
+    let testImageFile = null;
+    let historyRecords = [];
+    let currentLightboxZoom = 1.0;
+    let lastTrendData = [];
+
+    // Workpiece corner handles for alignment [tl, tr, br, bl] in normalized [0, 1] coords
+    let currentWorkpieceCorners = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.9, y: 0.1 },
+      { x: 0.9, y: 0.9 },
+      { x: 0.1, y: 0.9 }
+    ];
+    let isDraggingCorner = -1;
+
+    // Theme Management
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('inspectra-theme', next);
+      // Re-render chart so bar and axis colors adjust smoothly to current theme
+      if (lastTrendData && lastTrendData.length > 0) {
+        renderTrendChart(lastTrendData);
+      }
+    }
+
+    // Navigation Switcher
+    function switchTab(tabId) {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+      });
+      document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === tabId);
+      });
+      if (tabId === 'tab-overview') loadOperationalStatistics();
+      if (tabId === 'tab-history') loadHistory();
+      if (tabId === 'tab-profiles') loadProfiles();
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    // Initialize application on load
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadProfiles();
+      await loadOperationalStatistics();
+      setupCanvasEvents();
+    });
+
+    // -------------------------------------------------------------------------
+    // 1. OVERVIEW & OPERATIONAL STATISTICS
+    // -------------------------------------------------------------------------
+    async function loadOperationalStatistics() {
+      const days = document.getElementById('statDaysFilter').value;
+      const url = days ? `/reports/statistics?days=${days}` : '/reports/statistics';
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderOperationalStatistics(data);
+      } catch (err) {
+        console.error('Failed to load statistics:', err);
+      }
+    }
+
+    function renderOperationalStatistics(stats) {
+      document.getElementById('kpiCompleted').innerText = stats.completed_inspections;
+      document.getElementById('kpiTotalAttempts').innerText = `Denominator: ${stats.total_attempts} attempts`;
+
+      document.getElementById('kpiPassRate').innerText = stats.pass_rate_percent !== null ? `${stats.pass_rate_percent}%` : '-%';
+      document.getElementById('kpiPassCount').innerText = `${stats.pass_count} passed`;
+
+      document.getElementById('kpiRejectRate').innerText = stats.reject_rate_percent !== null ? `${stats.reject_rate_percent}%` : '-%';
+      document.getElementById('kpiRejectCount').innerText = `${stats.reject_count} rejected`;
+
+      document.getElementById('kpiReviewRate').innerText = stats.review_rate_percent !== null ? `${stats.review_rate_percent}%` : '-%';
+      document.getElementById('kpiReviewCount').innerText = `${stats.review_count} review`;
+
+      document.getElementById('kpiErrors').innerText = stats.processing_errors_count;
+      document.getElementById('kpiAvgLatency').innerText = stats.avg_total_latency_ms !== null ? `${Math.round(stats.avg_total_latency_ms)} ms` : '- ms';
+      document.getElementById('kpiInferenceLatency').innerText = stats.avg_inference_latency_ms !== null ? `Inference: ${Math.round(stats.avg_inference_latency_ms)} ms` : 'Inference: - ms';
+
+      // Frequently failed checks
+      const failBox = document.getElementById('failedChecksTableBox');
+      if (stats.frequently_failed_checks && stats.frequently_failed_checks.length > 0) {
+        let html = '<table><thead><tr><th>Check</th><th>Failures</th><th>Failure Rate</th></tr></thead><tbody>';
+        stats.frequently_failed_checks.forEach(item => {
+          html += `<tr><td><strong>${escapeHtml(item.description)}</strong></td><td>${item.failure_count}</td><td><span class="tag reject">${item.failure_rate_percent}%</span></td></tr>`;
+        });
+        html += '</tbody></table>';
+        failBox.innerHTML = html;
+      } else {
+        failBox.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <div class="empty-state-title">No Component Failures</div>
+            <div class="empty-state-desc">Zero defects or missing items recorded in the selected period.</div>
+          </div>
+        `;
+      }
+
+      // Pure SVG Trend Chart
+      lastTrendData = stats.volume_trends || [];
+      renderTrendChart(lastTrendData);
+
+      // Ground Truth Benchmarking
+      const gt = stats.ground_truth;
+      if (gt && gt.total_labelled > 0) {
+        document.getElementById('gtAccuracy').innerText = gt.accuracy_percent !== null ? `${gt.accuracy_percent}%` : '-%';
+        document.getElementById('gtSampleCount').innerText = `${gt.total_labelled} verified samples`;
+
+        document.getElementById('gtFAR').innerText = gt.false_accept_rate_percent !== null ? `${gt.false_accept_rate_percent}%` : '0.0%';
+        document.getElementById('gtFACount').innerText = `${gt.false_accept_count} defects wrongly accepted`;
+
+        document.getElementById('gtFRR').innerText = gt.false_reject_rate_percent !== null ? `${gt.false_reject_rate_percent}%` : '0.0%';
+        document.getElementById('gtFRCount').innerText = `${gt.false_reject_count} good units wrongly rejected`;
+
+        const cov = Math.round((gt.total_labelled / (stats.total_attempts || 1)) * 100);
+        document.getElementById('gtCoverage').innerText = `${cov}%`;
+        document.getElementById('gtCoverageDetail').innerText = `${gt.total_labelled} labelled / ${stats.total_attempts} total`;
+
+        // Render Confusion Matrix
+        const cm = gt.confusion_matrix || {};
+        const cmBody = document.getElementById('gtConfusionMatrixBody');
+        cmBody.innerHTML = `
+          <tr><td>Ground Truth PASS</td><td><strong>${cm.PASS ? cm.PASS.PASS : 0}</strong></td><td>${cm.PASS ? cm.PASS.REJECT : 0}</td><td>${cm.PASS ? cm.PASS.REVIEW : 0}</td></tr>
+          <tr><td>Ground Truth REJECT</td><td>${cm.REJECT ? cm.REJECT.PASS : 0}</td><td><strong>${cm.REJECT ? cm.REJECT.REJECT : 0}</strong></td><td>${cm.REJECT ? cm.REJECT.REVIEW : 0}</td></tr>
+          <tr><td>Ground Truth REVIEW</td><td>${cm.REVIEW ? cm.REVIEW.PASS : 0}</td><td>${cm.REVIEW ? cm.REVIEW.REJECT : 0}</td><td><strong>${cm.REVIEW ? cm.REVIEW.REVIEW : 0}</strong></td></tr>
+        `;
+      } else {
+        document.getElementById('gtAccuracy').innerText = '-%';
+        document.getElementById('gtSampleCount').innerText = '0 labelled samples';
+        document.getElementById('gtFAR').innerText = '-%';
+        document.getElementById('gtFACount').innerText = 'Requires labelled ground truth';
+        document.getElementById('gtFRR').innerText = '-%';
+        document.getElementById('gtFRCount').innerText = 'Requires labelled ground truth';
+        document.getElementById('gtCoverage').innerText = '0%';
+        document.getElementById('gtCoverageDetail').innerText = `0 labelled / ${stats.total_attempts} total`;
+      }
+
+      // Recent inspections
+      const recBody = document.getElementById('overviewRecentInspectionsBody');
+      if (stats.recent_inspections && stats.recent_inspections.length > 0) {
+        recBody.innerHTML = stats.recent_inspections.map(r => `
+          <tr>
+            <td>${formatTime(r.created_at)}</td>
+            <td style="font-family:'JetBrains Mono', monospace; font-size:0.75rem;">${escapeHtml(r.inspection_id)}</td>
+            <td>${escapeHtml(r.profile_id)} <span class="tag neutral">v${r.profile_version}</span></td>
+            <td><span class="tag ${r.verdict.toLowerCase()}">${r.verdict}</span></td>
+            <td>${r.inspection_state === 'ERROR' ? '<span class="tag reject">ERROR</span>' : '<span class="tag pass">OK</span>'}</td>
+            <td>${Math.round(r.total_latency_ms)} ms</td>
+            <td>${r.ground_truth_verdict ? `<span class="tag ${r.ground_truth_verdict.toLowerCase()}">GT: ${r.ground_truth_verdict}</span>` : '<span style="color:var(--text-faint);">Unlabelled</span>'}</td>
+          </tr>
+        `).join('');
+      } else {
+        recBody.innerHTML = '<tr><td colspan="7" class="empty-state">No inspections recorded yet.</td></tr>';
+      }
+    }
+
+    function renderTrendChart(trends) {
+      const box = document.getElementById('trendChartBox');
+      if (!trends || trends.length === 0) {
+        box.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            <div class="empty-state-title">No Activity in Period</div>
+            <div class="empty-state-desc">Inspection volume and decision breakdown will appear as runs are recorded.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const w = 600;
+      const h = 180;
+      const padding = 30;
+      const maxVal = Math.max(...trends.map(t => t.total_attempts), 5);
+      const stepX = (w - padding * 2) / Math.max(trends.length - 1, 1);
+
+      const barBg = isLight ? '#e2e8f0' : '#1e293b';
+      const passColor = isLight ? 'rgba(5, 150, 105, 0.85)' : 'rgba(16, 185, 129, 0.75)';
+      const axisColor = isLight ? '#cbd5e1' : '#243047';
+      const textColor = isLight ? '#64748b' : '#94a3b8';
+
+      let bars = '';
+      trends.forEach((t, i) => {
+        const x = padding + i * stepX;
+        const totalH = (t.total_attempts / maxVal) * (h - padding * 2);
+        const passH = (t.pass_count / maxVal) * (h - padding * 2);
+        const yBase = h - padding;
+
+        bars += `
+          <g>
+            <rect x="${x - 12}" y="${yBase - totalH}" width="24" height="${totalH}" fill="${barBg}" rx="3"></rect>
+            <rect x="${x - 12}" y="${yBase - passH}" width="24" height="${passH}" fill="${passColor}" rx="3"></rect>
+            <text x="${x}" y="${h - 8}" text-anchor="middle" font-size="10" fill="${textColor}" font-family="'JetBrains Mono', monospace">${t.date.slice(5)}</text>
+            <text x="${x}" y="${yBase - totalH - 4}" text-anchor="middle" font-size="10" fill="${textColor}" font-weight="600" font-family="'JetBrains Mono', monospace">${t.total_attempts}</text>
+          </g>
+        `;
+      });
+
+      box.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:100%;">
+          <line x1="${padding}" y1="${h - padding}" x2="${w - padding}" y2="${h - padding}" stroke="${axisColor}" stroke-width="1" />
+          ${bars}
+        </svg>
+      `;
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. INSPECTION WORKFLOW
+    // -------------------------------------------------------------------------
+    async function loadProfiles() {
+      try {
+        const res = await fetch('/profiles');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        profilesList = await res.json();
+        renderProfilesUI();
+      } catch (err) {
+        console.error('Failed to load profiles:', err);
+      }
+    }
+
+    function renderProfilesUI() {
+      const select = document.getElementById('inspectProfileSelect');
+      select.innerHTML = profilesList.map(p => `
+        <option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version})</option>
+      `).join('');
+
+      if (profilesList.length > 0) {
+        onInspectProfileChange();
+      }
+
+      // Populate Profiles Table in tab-profiles
+      const tbody = document.getElementById('profilesTableBody');
+      tbody.innerHTML = profilesList.map(p => `
+        <tr>
+          <td><strong>${escapeHtml(p.name)}</strong><br><span style="font-size:0.75rem; color:var(--text-faint);">${escapeHtml(p.description || '')}</span></td>
+          <td><span class="tag neutral">v${p.version}</span></td>
+          <td>${p.reference_image_id ? '<span class="tag pass">Approved Reference</span>' : '<span class="tag reject">Missing Reference</span>'}</td>
+          <td>${p.checklist ? p.checklist.length : 0} acceptance checks</td>
+          <td>${formatTime(p.updated_at || p.created_at)}</td>
+          <td>
+            <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select for Inspection</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function selectProfileForInspection(profileId) {
+      document.getElementById('inspectProfileSelect').value = profileId;
+      switchTab('tab-inspect');
+      onInspectProfileChange();
+    }
+
+    function onInspectProfileChange() {
+      const pid = document.getElementById('inspectProfileSelect').value;
+      currentProfile = profilesList.find(p => p.profile_id === pid);
+      if (!currentProfile) return;
+
+      const refImg = document.getElementById('refImageDisplay');
+      const refPlaceholder = document.getElementById('refEmptyPlaceholder');
+      const refSubtitle = document.getElementById('refImageSubtitle');
+
+      if (currentProfile.reference_image_id) {
+        refImg.src = `/profiles/${currentProfile.profile_id}/reference-image?t=${Date.now()}`;
+        refImg.style.display = 'block';
+        refPlaceholder.style.display = 'none';
+        refSubtitle.innerText = `Baseline Golden Reference (v${currentProfile.version})`;
+      } else {
+        refImg.style.display = 'none';
+        refPlaceholder.style.display = 'flex';
+        refSubtitle.innerText = 'Add an approved reference first.';
+      }
+
+      updateRunButtonState();
+    }
+
+    // Image Upload & Client-Side Resizing (Protects against Vercel 4.5MB limit)
+    async function onTestPhotoSelected(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const compressedFile = await compressImageIfExceedsLimit(file, 2048, 0.90);
+      testImageFile = compressedFile;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const testImg = document.getElementById('testImageDisplay');
+        testImg.src = e.target.result;
+        testImg.style.display = 'block';
+        document.getElementById('testEmptyPlaceholder').style.display = 'none';
+        document.getElementById('btnInspectLightbox').style.display = 'inline-flex';
+        document.getElementById('btnResetCorners').style.display = 'inline-flex';
+
+        setupInteractiveAlignmentCanvas();
+        updateRunButtonState();
+      };
+      reader.readAsDataURL(compressedFile);
+    }
+
+    async function compressImageIfExceedsLimit(file, maxDimension, quality) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width <= maxDimension && height <= maxDimension && file.size <= 2 * 1024 * 1024) {
+            resolve(file);
+            return;
+          }
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', quality);
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    function setupInteractiveAlignmentCanvas() {
+      const canvas = document.getElementById('testCanvas');
+      canvas.style.display = 'block';
+      drawAlignmentPins();
+    }
+
+    function drawAlignmentPins() {
+      const canvas = document.getElementById('testCanvas');
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const pts = currentWorkpieceCorners.map(p => ({
+        x: p.x * canvas.width,
+        y: p.y * canvas.height
+      }));
+
+      // Draw quadrilateral boundary
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.lineTo(pts[2].x, pts[2].y);
+      ctx.lineTo(pts[3].x, pts[3].y);
+      ctx.closePath();
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(14, 165, 233, 0.12)';
+      ctx.fill();
+
+      // Corner handles
+      pts.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#0ea5e9';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
+
+    function resetWorkpieceCorners() {
+      currentWorkpieceCorners = [
+        { x: 0.05, y: 0.05 },
+        { x: 0.95, y: 0.05 },
+        { x: 0.95, y: 0.95 },
+        { x: 0.05, y: 0.95 }
+      ];
+      drawAlignmentPins();
+    }
+
+    function setupCanvasEvents() {
+      const canvas = document.getElementById('testCanvas');
+      canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        isDraggingCorner = -1;
+        currentWorkpieceCorners.forEach((p, idx) => {
+          const px = p.x * canvas.width;
+          const py = p.y * canvas.height;
+          const dist = Math.hypot(px - mx, py - my);
+          if (dist < 18) isDraggingCorner = idx;
+        });
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (isDraggingCorner === -1) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = Math.max(0, Math.min(canvas.width, e.clientX - rect.left));
+        const my = Math.max(0, Math.min(canvas.height, e.clientY - rect.top));
+        currentWorkpieceCorners[isDraggingCorner] = {
+          x: mx / canvas.width,
+          y: my / canvas.height
+        };
+        drawAlignmentPins();
+      });
+
+      window.addEventListener('mouseup', () => { isDraggingCorner = -1; });
+    }
+
+    function updateRunButtonState() {
+      const btn = document.getElementById('btnRunInspection');
+      const hasRef = currentProfile && currentProfile.reference_image_id;
+      const hasTest = testImageFile !== null;
+      btn.disabled = !(hasRef && hasTest);
+
+      if (!hasRef) {
+        document.getElementById('inspectionStateNotice').innerText = 'Add an approved reference first.';
+      } else if (!hasTest) {
+        document.getElementById('inspectionStateNotice').innerText = 'Upload a production photograph to inspect.';
+      } else {
+        document.getElementById('inspectionStateNotice').innerText = 'Ready to inspect workpiece.';
+      }
+    }
+
+    // Execute Inspection Execution
+    async function executeInspection() {
+      if (!currentProfile || !testImageFile) return;
+
+      const btn = document.getElementById('btnRunInspection');
+      btn.disabled = true;
+      document.getElementById('btnRunText').innerText = 'Inspecting Workpiece...';
+
+      const formData = new FormData();
+      formData.append('file', testImageFile);
+      const cornersPayload = {
+        top_left: [currentWorkpieceCorners[0].x, currentWorkpieceCorners[0].y],
+        top_right: [currentWorkpieceCorners[1].x, currentWorkpieceCorners[1].y],
+        bottom_right: [currentWorkpieceCorners[2].x, currentWorkpieceCorners[2].y],
+        bottom_left: [currentWorkpieceCorners[3].x, currentWorkpieceCorners[3].y],
+        coordinate_space: 'original_test_image'
+      };
+      formData.append('test_corners_json', JSON.stringify(cornersPayload));
+
+      try {
+        const res = await fetch(`/profiles/${currentProfile.profile_id}/inspect`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error HTTP ${res.status}`);
+        }
+
+        const inspection = await res.json();
+        currentInspection = inspection;
+        renderInspectionResults(inspection);
+      } catch (err) {
+        alert(`Inspection Failed: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('btnRunText').innerText = 'Run Inspection';
+      }
+    }
+
+    function renderInspectionResults(insp) {
+      const resultsArea = document.getElementById('inspectionResultsArea');
+      resultsArea.style.display = 'flex';
+
+      // Verdict Banner
+      const banner = document.getElementById('verdictBanner');
+      banner.className = `verdict-banner ${insp.verdict}`;
+      document.getElementById('verdictText').innerText = insp.verdict;
+      document.getElementById('verdictReason').innerText = insp.verdict_reason;
+      document.getElementById('verdictId').innerText = insp.inspection_id;
+
+      // Update Verdict SVG Icon
+      const icon = document.getElementById('verdictIcon');
+      if (insp.verdict === 'PASS') {
+        icon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+      } else if (insp.verdict === 'REJECT') {
+        icon.innerHTML = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+      } else {
+        icon.innerHTML = '<polygon points="12 2 2 22 22 22 12 2"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>';
+      }
+
+      // Quality & Alignment
+      document.getElementById('valGeoAlign').innerText = insp.geometric_alignment_ok ? 'Verified OK' : 'Alignment Warning';
+      document.getElementById('valImageQuality').innerText = insp.image_quality_ok ? 'Sharp / Exposed' : 'Quality Warning';
+      document.getElementById('valIdentity').innerText = insp.reference_identity_ok ? 'Confirmed Match' : 'Mismatch';
+      document.getElementById('valLatency').innerText = `${Math.round(insp.total_latency_ms)} ms`;
+      document.getElementById('valInfLatency').innerText = `Inference: ${Math.round(insp.inference_latency_ms)} ms`;
+
+      // Annotated Overlays
+      if (insp.annotated_image_png_base64) {
+        document.getElementById('annotatedDisplay').src = `data:image/png;base64,${insp.annotated_image_png_base64}`;
+      }
+
+      // Difference Map
+      if (insp.opencv_diff_png_base64) {
+        document.getElementById('diffDisplay').src = `data:image/png;base64,${insp.opencv_diff_png_base64}`;
+        if (!insp.difference_map_reliable) {
+          document.getElementById('diffSubtitle').innerText = 'Reference comparison unreliable (disparity detected)';
+        } else {
+          document.getElementById('diffSubtitle').innerText = 'Illumination-normalized Turbo heatmap inside workpiece area';
+        }
+      }
+
+      // Populate Findings Table
+      const tbody = document.getElementById('findingsTableBody');
+      tbody.innerHTML = (insp.findings || []).map(f => `
+        <tr>
+          <td><strong>${escapeHtml(f.label || f.description)}</strong></td>
+          <td><span class="tag ${f.status.toLowerCase()}">${f.status}</span></td>
+          <td>${f.check_type || 'presence'}</td>
+          <td>${escapeHtml(f.expected_requirement || '-')}</td>
+          <td>${escapeHtml(f.observed_state_or_count || '-')}</td>
+          <td style="font-family:'JetBrains Mono', monospace; font-size:0.75rem;">${f.coordinate_space || 'rectified_workpiece'}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('gtStatusMessage').innerText = '';
+      resultsArea.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    async function recordGroundTruth(verdict) {
+      if (!currentInspection) return;
+      const notes = document.getElementById('gtNotesInput').value;
+
+      try {
+        const res = await fetch(`/inspections/${currentInspection.inspection_id}/ground-truth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expected_verdict: verdict, notes: notes })
+        });
+        if (!res.ok) throw new Error('Failed to save ground truth');
+        document.getElementById('gtStatusMessage').innerText = `Recorded Ground Truth: ${verdict}`;
+        await loadOperationalStatistics();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. HISTORY AUDIT LOG
+    // -------------------------------------------------------------------------
+    async function loadHistory() {
+      try {
+        const res = await fetch('/inspections?limit=200');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        historyRecords = await res.json();
+        filterHistoryTable();
+      } catch (err) {
+        console.error('Failed to load history:', err);
+      }
+    }
+
+    function filterHistoryTable() {
+      const search = document.getElementById('historySearch').value.toLowerCase();
+      const verdict = document.getElementById('historyVerdictFilter').value;
+      const state = document.getElementById('historyStateFilter').value;
+
+      const filtered = historyRecords.filter(r => {
+        if (verdict && r.verdict !== verdict) return false;
+        if (state && r.inspection_state !== state) return false;
+        if (search && !r.inspection_id.toLowerCase().includes(search) && !r.profile_id.toLowerCase().includes(search)) return false;
+        return true;
+      });
+
+      const tbody = document.getElementById('historyTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="empty-state">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <div class="empty-state-title">No Matching Records</div>
+              <div class="empty-state-desc">Try clearing your search query or verdict filters.</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => `
+        <tr>
+          <td>${formatTime(r.created_at)}</td>
+          <td style="font-family:'JetBrains Mono', monospace; font-size:0.75rem;">${escapeHtml(r.inspection_id)}</td>
+          <td>${escapeHtml(r.profile_id)} <span class="tag neutral">v${r.profile_version}</span></td>
+          <td><span class="tag ${r.verdict.toLowerCase()}">${r.verdict}</span></td>
+          <td>${r.inspection_state === 'ERROR' ? `<span class="tag reject">${escapeHtml(r.failure_category || 'ERROR')}</span>` : '<span class="tag pass">COMPLETED</span>'}</td>
+          <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.verdict_reason || '')}</td>
+          <td>${r.geometric_alignment_ok ? 'OK' : 'Warning'}</td>
+          <td>${Math.round(r.total_latency_ms)} ms</td>
+          <td>${r.ground_truth_verdict ? `<span class="tag ${r.ground_truth_verdict.toLowerCase()}">GT: ${r.ground_truth_verdict}</span>` : '<span style="color:var(--text-faint);">Unlabelled</span>'}</td>
+          <td>
+            <button class="btn" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="viewHistoricInspection('${r.inspection_id}')">View</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function viewHistoricInspection(id) {
+      const record = historyRecords.find(r => r.inspection_id === id);
+      if (!record) return;
+      currentInspection = record;
+      switchTab('tab-inspect');
+      renderInspectionResults(record);
+    }
+
+    function exportData(format) {
+      window.open(`/reports/export?format=${format}`, '_blank');
+    }
+
+    // -------------------------------------------------------------------------
+    // 4. MODALS & UTILITIES
+    // -------------------------------------------------------------------------
+    function openLightbox(viewType) {
+      const modal = document.getElementById('lightboxModal');
+      const img = document.getElementById('lightboxImage');
+      const title = document.getElementById('lightboxTitle');
+      currentLightboxZoom = 1.0;
+      img.style.transform = `scale(1.0)`;
+
+      if (viewType === 'ref') {
+        const refSrc = document.getElementById('refImageDisplay').src;
+        if (!refSrc) return;
+        img.src = refSrc;
+        title.innerHTML = '<svg style="width:18px;height:18px;stroke:var(--accent);fill:none;" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> <span>High-Resolution Approved Reference</span>';
+      } else if (viewType === 'test') {
+        const testSrc = document.getElementById('testImageDisplay').src;
+        if (!testSrc) return;
+        img.src = testSrc;
+        title.innerHTML = '<svg style="width:18px;height:18px;stroke:var(--accent);fill:none;" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> <span>High-Resolution Production Photograph</span>';
+      } else if (viewType === 'annotated') {
+        const annSrc = document.getElementById('annotatedDisplay').src;
+        if (!annSrc) return;
+        img.src = annSrc;
+        title.innerHTML = '<svg style="width:18px;height:18px;stroke:var(--accent);fill:none;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg> <span>High-Resolution Annotated Overlays</span>';
+      } else if (viewType === 'diff') {
+        const diffSrc = document.getElementById('diffDisplay').src;
+        if (!diffSrc) return;
+        img.src = diffSrc;
+        title.innerHTML = '<svg style="width:18px;height:18px;stroke:var(--accent);fill:none;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></svg> <span>High-Resolution Reference Difference Heatmap</span>';
+      }
+      modal.classList.add('active');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightboxModal').classList.remove('active');
+    }
+
+    function adjustLightboxZoom(scaleFactor) {
+      if (scaleFactor === 1.0) currentLightboxZoom = 1.0;
+      else currentLightboxZoom *= scaleFactor;
+      currentLightboxZoom = Math.max(0.5, Math.min(4.0, currentLightboxZoom));
+      document.getElementById('lightboxImage').style.transform = `scale(${currentLightboxZoom})`;
+    }
+
+    function openNewProfileModal() {
+      document.getElementById('profileModal').classList.add('active');
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profileModal').classList.remove('active');
+    }
+
+    async function submitCreateProfile() {
+      const name = document.getElementById('newProfName').value.trim();
+      const desc = document.getElementById('newProfDesc').value.trim();
+      const fileInput = document.getElementById('newProfFile');
+      if (!name) { alert('Profile name is required'); return; }
+
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('description', desc);
+      formData.append('checklist_json', JSON.stringify([]));
+      formData.append('regions_json', JSON.stringify([]));
+      if (fileInput.files[0]) {
+        formData.append('reference_file', fileInput.files[0]);
+        formData.append('reference_image', fileInput.files[0]);
+      }
+
+      const saveBtn = document.querySelector('#profileModal .btn-primary');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Uploading & Saving...';
+      }
+
+      try {
+        const res = await fetch('/profiles', {
+          method: 'POST',
+          body: formData
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'Failed to create profile');
+        }
+        const createdProfile = await res.json();
+        closeProfileModal();
+        await loadProfiles();
+        if (createdProfile && createdProfile.profile_id) {
+          selectProfileForInspection(createdProfile.profile_id);
+        }
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = 'Save Profile';
+        }
+      }
+    }
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '-';
+      try {
+        const d = new Date(isoStr);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return isoStr;
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

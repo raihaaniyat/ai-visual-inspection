@@ -1,0 +1,66 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/profiles/(.*)",
+      "destination": "/api/index.py?__path=/profiles/$1"
+    },
+    {
+      "source": "/profiles",
+      "destination": "/api/index.py?__path=/profiles"
+    },
+    {
+      "source": "/inspections/(.*)",
+      "destination": "/api/index.py?__path=/inspections/$1"
+    },
+    {
+      "source": "/inspections",
+      "destination": "/api/index.py?__path=/inspections"
+    },
+    {
+      "source": "/reports/(.*)",
+      "destination": "/api/index.py?__path=/reports/$1"
+    },
+    {
+      "source": "/reports",
+      "destination": "/api/index.py?__path=/reports"
+    },
+    {
+      "source": "/geometry/(.*)",
+      "destination": "/api/index.py?__path=/geometry/$1"
+    },
+    {
+      "source": "/demo/(.*)",
+      "destination": "/api/index.py?__path=/demo/$1"
+    },
+    {
+      "source": "/demo",
+      "destination": "/api/index.py?__path=/demo"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.py?__path=/api/$1"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.py?__path=/health"
+    },
+    {
+      "source": "/metrics",
+      "destination": "/api/index.py?__path=/metrics"
+    },
+    {
+      "source": "/inspect",
+      "destination": "/api/index.py?__path=/inspect"
+    },
+    {
+      "source": "/docs",
+      "destination": "/api/index.py?__path=/docs"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index.py?__path=/openapi.json"
+    }
+  ]
+}
+
