@@ -79,6 +79,7 @@ from backend.storage import (
     save_inspection,
     update_ground_truth,
     update_profile_reference,
+    remove_profile_reference,
 )
 
 METRICS_PATH = Path("training/results/metrics.json")
@@ -423,6 +424,18 @@ async def upload_profile_reference(
         reference_image=ref_image,
         reference_corners=corners,
     )
+
+
+@app.delete("/profiles/{profile_id}/reference", response_model=ProfileResponse)
+def delete_profile_reference(profile_id: str) -> ProfileResponse:
+    """
+    Deletes the approved reference image and associated corners from a profile,
+    clearing regions and resetting the reference status to unconfigured.
+    """
+    profile = get_profile(profile_id)
+    if not profile:
+        raise HTTPException(404, f"Profile '{profile_id}' not found.")
+    return remove_profile_reference(profile_id)
 
 
 @app.post("/profiles/{profile_id}/config", response_model=ProfileResponse)

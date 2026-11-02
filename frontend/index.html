@@ -1006,10 +1006,18 @@
               </div>
               <div class="card-subtitle" id="refImageSubtitle">Baseline Golden Reference</div>
             </div>
-            <div style="display:flex; gap:0.5rem;">
-              <button class="btn" onclick="openLightbox('ref')">
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <button class="btn" id="btnRefZoom" onclick="openLightbox('ref')" style="display:none;">
                 <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                 <span>Zoom</span>
+              </button>
+              <button class="btn" id="btnRefUpload" onclick="if(currentProfile) uploadReferenceForProfile(currentProfile.profile_id)">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="btnRefUploadText">Upload Reference</span>
+              </button>
+              <button class="btn" id="btnRefDelete" onclick="if(currentProfile) deleteReferenceForProfile(currentProfile.profile_id)" style="display:none; color:var(--reject); border-color:rgba(239, 68, 68, 0.4);" title="Delete Approved Reference">
+                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                <span>Delete</span>
               </button>
             </div>
           </div>
@@ -1625,22 +1633,28 @@
     // -------------------------------------------------------------------------
     // 2. INSPECTION WORKFLOW
     // -------------------------------------------------------------------------
-    async function loadProfiles() {
+    async function loadProfiles(preferredId) {
       try {
         const res = await fetch('/profiles');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         profilesList = await res.json();
-        renderProfilesUI();
+        renderProfilesUI(preferredId);
       } catch (err) {
         console.error('Failed to load profiles:', err);
       }
     }
 
-    function renderProfilesUI() {
+    function renderProfilesUI(preferredId) {
       const select = document.getElementById('inspectProfileSelect');
+      const targetId = preferredId || select.value || (currentProfile ? currentProfile.profile_id : (profilesList[0] ? profilesList[0].profile_id : null));
+
       select.innerHTML = profilesList.map(p => `
-        <option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version})</option>
+        <option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version}${p.reference_image_id ? '' : ' - no reference'})</option>
       `).join('');
+
+      if (targetId && profilesList.some(p => p.profile_id === targetId)) {
+        select.value = targetId;
+      }
 
       if (profilesList.length > 0) {
         onInspectProfileChange();
@@ -1656,11 +1670,19 @@
           <td>${p.checklist ? p.checklist.length : 0} acceptance checks</td>
           <td>${formatTime(p.updated_at || p.created_at)}</td>
           <td>
-            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
-              <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select for Inspection</button>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+              <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select</button>
               <button class="btn" onclick="uploadReferenceForProfile('${p.profile_id}')" title="Upload or Replace Approved Reference">
                 <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle; margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>${p.reference_image_id ? 'Replace Ref' : 'Upload Ref'}</span>
+              </button>
+              ${p.reference_image_id ? `
+                <button class="btn" onclick="deleteReferenceForProfile('${p.profile_id}')" title="Delete Reference Image" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);">
+                  <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                </button>
+              ` : ''}
+              <button class="btn" onclick="deleteProfile('${p.profile_id}', '${escapeHtml(p.name)}')" title="Delete Profile" style="color:var(--text-faint);">
+                <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
           </td>
@@ -1682,20 +1704,40 @@
       const refImg = document.getElementById('refImageDisplay');
       const refPlaceholder = document.getElementById('refEmptyPlaceholder');
       const refSubtitle = document.getElementById('refImageSubtitle');
+      const btnZoom = document.getElementById('btnRefZoom');
+      const btnDelete = document.getElementById('btnRefDelete');
+      const btnUploadText = document.getElementById('btnRefUploadText');
 
       if (currentProfile.reference_image_id) {
+        if (btnZoom) btnZoom.style.display = 'inline-flex';
+        if (btnDelete) btnDelete.style.display = 'inline-flex';
+        if (btnUploadText) btnUploadText.innerText = 'Replace Reference';
+
         refImg.onload = () => {
           refImg.style.display = 'block';
           refPlaceholder.style.display = 'none';
         };
         refImg.onerror = () => {
-          refImg.style.display = 'none';
-          refPlaceholder.style.display = 'flex';
-          refSubtitle.innerText = 'Approved reference could not be loaded.';
+          if (refImg.src && !refImg.src.endsWith('/')) {
+            refImg.style.display = 'none';
+            refPlaceholder.style.display = 'flex';
+            refSubtitle.innerText = 'Approved reference could not be loaded.';
+          }
         };
-        refImg.src = `/profiles/${currentProfile.profile_id}/reference-image?t=${Date.now()}`;
+
+        const targetUrl = `/profiles/${currentProfile.profile_id}/reference-image?t=${Date.now()}`;
+        refImg.src = targetUrl;
+        if (refImg.complete && refImg.naturalWidth > 0) {
+          refImg.style.display = 'block';
+          refPlaceholder.style.display = 'none';
+        }
         refSubtitle.innerText = `Baseline Golden Reference (v${currentProfile.version})`;
       } else {
+        if (btnZoom) btnZoom.style.display = 'none';
+        if (btnDelete) btnDelete.style.display = 'none';
+        if (btnUploadText) btnUploadText.innerText = 'Upload Reference';
+
+        refImg.src = '';
         refImg.style.display = 'none';
         refPlaceholder.style.display = 'flex';
         refSubtitle.innerText = 'Add an approved reference first.';
@@ -2137,10 +2179,15 @@
         }
         const createdProfile = await res.json();
         closeProfileModal();
-        await loadProfiles();
-        if (createdProfile && createdProfile.profile_id) {
-          selectProfileForInspection(createdProfile.profile_id);
-        }
+
+        // Clear modal form inputs
+        document.getElementById('newProfName').value = '';
+        document.getElementById('newProfDesc').value = '';
+        document.getElementById('newProfFile').value = '';
+
+        profilesList.unshift(createdProfile);
+        renderProfilesUI(createdProfile.profile_id);
+        selectProfileForInspection(createdProfile.profile_id);
       } catch (err) {
         alert(err.message);
       } finally {
@@ -2158,6 +2205,21 @@
       input.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+
+        // Ensure active selection switches to this profile immediately
+        selectProfileForInspection(profileId);
+
+        const refImg = document.getElementById('refImageDisplay');
+        const refPlaceholder = document.getElementById('refEmptyPlaceholder');
+        const refSubtitle = document.getElementById('refImageSubtitle');
+
+        // Immediate responsive local preview so operator sees image instantly
+        const localPreview = URL.createObjectURL(file);
+        refImg.src = localPreview;
+        refImg.style.display = 'block';
+        refPlaceholder.style.display = 'none';
+        refSubtitle.innerText = 'Uploading approved reference...';
+
         try {
           const compFile = await compressImageIfExceedsLimit(file, 2048, 0.90);
           const formData = new FormData();
@@ -2173,15 +2235,70 @@
             const errData = await res.json().catch(() => ({}));
             throw new Error(errData.detail || 'Failed to upload reference');
           }
-          await loadProfiles();
-          if (currentProfile && currentProfile.profile_id === profileId) {
-            onInspectProfileChange();
+          const updated = await res.json();
+          const idx = profilesList.findIndex(p => p.profile_id === profileId);
+          if (idx !== -1) {
+            profilesList[idx] = updated;
+          } else {
+            profilesList.unshift(updated);
           }
+          currentProfile = updated;
+          renderProfilesUI(profileId);
+          selectProfileForInspection(profileId);
         } catch (err) {
           alert('Upload failed: ' + err.message);
+          onInspectProfileChange();
         }
       };
       input.click();
+    }
+
+    async function deleteReferenceForProfile(profileId) {
+      const prof = profilesList.find(p => p.profile_id === profileId) || currentProfile;
+      const profName = prof ? prof.name : profileId;
+      if (!confirm(`Remove approved reference photograph from "${profName}"?\n\nAutomated visual inspection will be paused until a new baseline is uploaded.`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/profiles/${profileId}/reference`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'Failed to delete reference');
+        }
+        const updated = await res.json();
+        const idx = profilesList.findIndex(p => p.profile_id === profileId);
+        if (idx !== -1) {
+          profilesList[idx] = updated;
+        }
+        currentProfile = updated;
+        renderProfilesUI(profileId);
+        selectProfileForInspection(profileId);
+      } catch (err) {
+        alert('Failed to delete reference: ' + err.message);
+      }
+    }
+
+    async function deleteProfile(profileId, name) {
+      if (!confirm(`Permanently delete profile "${name}"?\n\nThis will remove the configuration and all inspection audit records associated with this profile.`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/profiles/${profileId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || 'Failed to delete profile');
+        }
+        profilesList = profilesList.filter(p => p.profile_id !== profileId);
+        const nextId = profilesList[0] ? profilesList[0].profile_id : null;
+        renderProfilesUI(nextId);
+        if (nextId) selectProfileForInspection(nextId);
+      } catch (err) {
+        alert('Failed to delete profile: ' + err.message);
+      }
     }
 
     function formatTime(isoStr) {

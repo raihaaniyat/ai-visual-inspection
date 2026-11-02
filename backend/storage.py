@@ -603,6 +603,73 @@ def update_profile_reference(
     )
 
 
+def remove_profile_reference(profile_id: str) -> ProfileResponse:
+    """
+    Removes approved reference image and associated corners from profile.
+    Clears reference_image_id, reference_corners, increments version, and invalidates old inspections.
+    """
+    init_db()
+    existing = get_profile(profile_id)
+    if not existing:
+        raise ValueError(f"Profile {profile_id} does not exist")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    new_version = existing.version + 1
+    cleared_regions: list[ExpectedRegion] = []
+    reg_json = json.dumps([])
+    cl_json = json.dumps([item.model_dump() for item in existing.checklist])
+
+    db_path = _get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE profiles 
+            SET reference_image_id = NULL, reference_corners_json = NULL, version = ?, regions_json = ?, updated_at = ?
+            WHERE profile_id = ?
+            """,
+            (new_version, reg_json, now_iso, profile_id),
+        )
+        cursor.execute("DELETE FROM inspections WHERE profile_id = ?", (profile_id,))
+        conn.commit()
+
+    if _is_supabase_configured():
+        try:
+            headers = {
+                **_supabase_headers(),
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates",
+            }
+            payload = {
+                "profile_id": profile_id,
+                "name": existing.name,
+                "description": existing.description or "",
+                "version": new_version,
+                "reference_image_id": None,
+                "reference_corners_json": None,
+                "checklist_json": cl_json,
+                "regions_json": reg_json,
+                "created_at": existing.created_at,
+                "updated_at": now_iso,
+            }
+            httpx.post(f"{settings.supabase_url}/rest/v1/profiles", headers=headers, json=payload, timeout=6)
+        except Exception as exc:
+            logger.debug("Supabase profile sync error: %s", exc)
+
+    return ProfileResponse(
+        profile_id=profile_id,
+        name=existing.name,
+        description=existing.description,
+        version=new_version,
+        reference_image_id=None,
+        reference_corners=None,
+        checklist=existing.checklist,
+        regions=cleared_regions,
+        created_at=existing.created_at,
+        updated_at=now_iso,
+    )
+
+
 def save_profile(
     name: str,
     description: str,
@@ -778,14 +845,16 @@ def delete_profile(profile_id: str) -> bool:
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM profiles WHERE profile_id = ?", (profile_id,))
+        deleted = cursor.rowcount > 0
         cursor.execute("DELETE FROM inspections WHERE profile_id = ?", (profile_id,))
         conn.commit()
-        deleted = cursor.rowcount > 0
 
     if _is_supabase_configured():
         try:
             headers = _supabase_headers()
-            httpx.delete(f"{settings.supabase_url}/rest/v1/profiles?profile_id=eq.{profile_id}", headers=headers, timeout=6)
+            r = httpx.delete(f"{settings.supabase_url}/rest/v1/profiles?profile_id=eq.{profile_id}", headers=headers, timeout=6)
+            if r.status_code in (200, 204):
+                deleted = True
         except Exception as exc:
             logger.debug("Supabase profile delete error: %s", exc)
 

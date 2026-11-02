@@ -177,6 +177,58 @@ def test_profile_without_reference_cannot_inspect():
     assert prof.reference_image_id is None
 
 
+def test_delete_profile_reference_endpoint_and_storage():
+    """Verify delete reference functionality removes reference image, increments version, and disables inspection."""
+    from backend.storage import remove_profile_reference
+    from fastapi.testclient import TestClient
+    from backend.app import app
+
+    checklist = [
+        CheckItem(check_id="chk_p1", check_type="presence", region_id="r1", description="Part 1"),
+    ]
+    regions = [
+        ExpectedRegion(region_id="r1", label="Part 1", box=NormalizedBox(ymin=0.1, xmin=0.1, ymax=0.3, xmax=0.3)),
+    ]
+    ref_img = Image.new("RGB", (400, 400), color=(100, 100, 100))
+    corners = WorkpieceCorners(top_left=[0.1, 0.1], top_right=[0.9, 0.1], bottom_right=[0.9, 0.9], bottom_left=[0.1, 0.9])
+
+    prof = create_or_save_profile(
+        name="Delete Ref Test Profile",
+        reference_image=ref_img,
+        reference_corners=corners,
+        checklist=checklist,
+        regions=regions,
+        profile_id="prof_del_ref_test",
+    )
+    assert prof.reference_image_id is not None
+    assert prof.version >= 1
+    init_ver = prof.version
+
+    # Call DELETE endpoint
+    client = TestClient(app)
+    del_res = client.delete("/profiles/prof_del_ref_test/reference")
+    assert del_res.status_code == 200, f"Delete failed: {del_res.text}"
+    updated = del_res.json()
+    assert updated["reference_image_id"] is None
+    assert updated["reference_corners"] is None
+    assert updated["version"] == init_ver + 1
+    assert len(updated["regions"]) == 0
+
+    # Verify GET reference-image now returns 404
+    get_img_res = client.get("/profiles/prof_del_ref_test/reference-image")
+    assert get_img_res.status_code == 404
+
+    # Verify inspect fails with 400 because reference was removed
+    test_buf = io.BytesIO()
+    ref_img.save(test_buf, format="JPEG")
+    insp_res = client.post(
+        "/profiles/prof_del_ref_test/inspect",
+        files={"file": ("test.jpg", test_buf.getvalue(), "image/jpeg")},
+    )
+    assert insp_res.status_code == 400
+    assert "Add an approved reference first" in insp_res.json()["detail"]
+
+
 # ==============================================================================
 # 2. GENERAL INSPECTION PROFILES & ARBITRARY CHECKLISTS
 # ==============================================================================
