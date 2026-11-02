@@ -861,6 +861,92 @@ def delete_profile(profile_id: str) -> bool:
     return deleted
 
 
+def clear_all_inspections() -> int:
+    """
+    Purges all stored inspection audit records from local SQLite and remote Supabase database.
+    Returns the count of deleted records.
+    """
+    init_db()
+    db_path = _get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM inspections")
+        count = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM inspections")
+        conn.commit()
+
+    if _is_supabase_configured():
+        try:
+            headers = _supabase_headers()
+            httpx.delete(
+                f"{settings.supabase_url}/rest/v1/inspections?inspection_id=not.is.null",
+                headers=headers,
+                timeout=10,
+            )
+            logger.info("Purged all inspection records from Supabase")
+        except Exception as exc:
+            logger.debug("Supabase clear all inspections error: %s", exc)
+
+    return count
+
+
+def delete_all_references() -> dict:
+    """
+    Clears approved reference photographs, workpiece corners, and expected regions
+    across all profiles in local SQLite and remote Supabase, increments profile versions,
+    and purges all inspection audit history (since all golden baselines have been invalidated).
+    """
+    init_db()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    db_path = _get_db_path()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM profiles")
+        profile_count = cursor.fetchone()[0]
+        cursor.execute(
+            """
+            UPDATE profiles 
+            SET reference_image_id = NULL,
+                reference_corners_json = NULL,
+                regions_json = '[]',
+                version = version + 1,
+                updated_at = ?
+            """,
+            (now_iso,),
+        )
+        conn.commit()
+
+    if _is_supabase_configured():
+        try:
+            headers = {
+                **_supabase_headers(),
+                "Content-Type": "application/json",
+            }
+            patch_payload = {
+                "reference_image_id": None,
+                "reference_corners_json": None,
+                "regions_json": "[]",
+                "updated_at": now_iso,
+            }
+            httpx.patch(
+                f"{settings.supabase_url}/rest/v1/profiles?profile_id=not.is.null",
+                headers=headers,
+                json=patch_payload,
+                timeout=10,
+            )
+            logger.info("Cleared all profile references in Supabase")
+        except Exception as exc:
+            logger.debug("Supabase clear all references error: %s", exc)
+
+    cleared_inspections = clear_all_inspections()
+
+    return {
+        "status": "references_and_history_cleared",
+        "cleared_profiles_count": profile_count,
+        "cleared_inspections_count": cleared_inspections,
+    }
+
+
 # ==============================================================================
 # Inspection Operations
 # ==============================================================================

@@ -67,7 +67,9 @@ from backend.schemas import (
     WorkpieceCorners,
 )
 from backend.storage import (
+    clear_all_inspections,
     create_or_save_profile,
+    delete_all_references,
     delete_profile,
     get_accuracy_report,
     get_operational_statistics,
@@ -76,10 +78,10 @@ from backend.storage import (
     list_inspections,
     list_profiles,
     load_image_file,
+    remove_profile_reference,
     save_inspection,
     update_ground_truth,
     update_profile_reference,
-    remove_profile_reference,
 )
 
 METRICS_PATH = Path("training/results/metrics.json")
@@ -588,6 +590,17 @@ def get_single_profile(profile_id: str) -> ProfileResponse:
     return profile
 
 
+@app.delete("/profiles/references/all", response_model=dict)
+@app.post("/profiles/references/delete-all", response_model=dict)
+@app.delete("/profiles/reference/all", response_model=dict)
+def delete_all_profile_references() -> dict:
+    """
+    Deletes all approved reference images and regions across all profiles,
+    and purges all stored inspection audit history.
+    """
+    return delete_all_references()
+
+
 @app.delete("/profiles/{profile_id}")
 def remove_profile(profile_id: str) -> dict:
     ok = delete_profile(profile_id)
@@ -821,6 +834,13 @@ def get_inspections(
     limit: int = Query(100, ge=1, le=500),
 ) -> list[AssemblyInspectionResponse]:
     return list_inspections(profile_id=profile_id, limit=limit)
+
+
+@app.delete("/inspections", response_model=dict)
+def delete_all_inspections() -> dict:
+    """Purges all stored inspection audit records from local and remote database storage."""
+    deleted_count = clear_all_inspections()
+    return {"status": "cleared", "deleted_count": deleted_count}
 
 
 @app.post("/inspections/{inspection_id}/ground-truth", response_model=dict)

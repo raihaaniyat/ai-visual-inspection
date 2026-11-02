@@ -1019,6 +1019,10 @@
                 <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 <span>Delete</span>
               </button>
+              <button class="btn" id="btnDeleteAllRefs" onclick="deleteAllReferencesAndHistory()" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);" title="Delete all references across all profiles & clear history">
+                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                <span>Delete All</span>
+              </button>
             </div>
           </div>
           <div class="image-viewport" id="refViewport">
@@ -1245,10 +1249,16 @@
           <h2 style="font-size:1.35rem; font-weight:700;">Inspection Profiles</h2>
           <p style="font-size:0.85rem; color:var(--text-muted);">Manage approved reference baselines, workpiece boundaries, and acceptance criteria.</p>
         </div>
-        <button class="btn btn-primary" onclick="openNewProfileModal()">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>Create New Profile</span>
-        </button>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <button class="btn" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);" onclick="deleteAllReferencesAndHistory()" title="Delete all reference photographs and clear inspection history">
+            <svg viewBox="0 0 24 24" style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <span>Delete All References & Clear History</span>
+          </button>
+          <button class="btn btn-primary" onclick="openNewProfileModal()">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>Create New Profile</span>
+          </button>
+        </div>
       </div>
 
       <!-- Profiles List Table -->
@@ -1285,7 +1295,11 @@
           <h2 style="font-size:1.35rem; font-weight:700;">Inspection History</h2>
           <p style="font-size:0.85rem; color:var(--text-muted);">Audit log of all production inspections, ground truth labels, and failure categories.</p>
         </div>
-        <div style="display:flex; gap:0.5rem;">
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <button class="btn" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);" onclick="clearInspectionHistory()" title="Purge all stored inspection history records">
+            <svg viewBox="0 0 24 24" style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <span>Clear History</span>
+          </button>
           <button class="btn" onclick="exportData('csv')">
             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <span>Export CSV</span>
@@ -1400,7 +1414,11 @@
         </div>
         <div>
           <label style="font-size:0.8rem; font-weight:600; color:var(--text-muted);">Approved Golden Reference Photograph</label>
-          <input type="file" id="newProfFile" accept="image/*">
+          <input type="file" id="newProfFile" accept="image/*" onchange="previewNewProfileImage(event)">
+          <div id="newProfPreviewContainer" style="display:none; margin-top:0.5rem; text-align:center; background:var(--viewport-bg); border:1px dashed var(--border); border-radius:6px; padding:0.5rem;">
+            <img id="newProfPreviewImg" src="" alt="Reference Preview" style="max-height:140px; max-width:100%; border-radius:4px; object-fit:contain;">
+            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.25rem;">Reference image preview selected</div>
+          </div>
           <div style="font-size:0.75rem; color:var(--text-faint); margin-top:0.25rem;">Replacing a reference increments profile version and invalidates old cached inspection results.</div>
         </div>
         <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
@@ -2141,6 +2159,22 @@
 
     function closeProfileModal() {
       document.getElementById('profileModal').classList.remove('active');
+      const previewBox = document.getElementById('newProfPreviewContainer');
+      if (previewBox) previewBox.style.display = 'none';
+      const previewImg = document.getElementById('newProfPreviewImg');
+      if (previewImg) previewImg.src = '';
+    }
+
+    function previewNewProfileImage(event) {
+      const file = event.target.files[0];
+      const previewBox = document.getElementById('newProfPreviewContainer');
+      const previewImg = document.getElementById('newProfPreviewImg');
+      if (file && previewBox && previewImg) {
+        previewImg.src = URL.createObjectURL(file);
+        previewBox.style.display = 'block';
+      } else if (previewBox) {
+        previewBox.style.display = 'none';
+      }
     }
 
     async function submitCreateProfile() {
@@ -2162,7 +2196,9 @@
         formData.append('checklist_json', JSON.stringify([]));
         formData.append('regions_json', JSON.stringify([]));
 
+        let localPreviewUrl = null;
         if (fileInput.files[0]) {
+          localPreviewUrl = URL.createObjectURL(fileInput.files[0]);
           const compRef = await compressImageIfExceedsLimit(fileInput.files[0], 2048, 0.90);
           formData.append('reference_file', compRef);
           formData.append('reference_image', compRef);
@@ -2188,6 +2224,14 @@
         profilesList.unshift(createdProfile);
         renderProfilesUI(createdProfile.profile_id);
         selectProfileForInspection(createdProfile.profile_id);
+
+        if (localPreviewUrl && createdProfile.reference_image_id) {
+          const refImg = document.getElementById('refImageDisplay');
+          const refPlaceholder = document.getElementById('refEmptyPlaceholder');
+          refImg.src = localPreviewUrl;
+          refImg.style.display = 'block';
+          refPlaceholder.style.display = 'none';
+        }
       } catch (err) {
         alert(err.message);
       } finally {
@@ -2298,6 +2342,60 @@
         if (nextId) selectProfileForInspection(nextId);
       } catch (err) {
         alert('Failed to delete profile: ' + err.message);
+      }
+    }
+
+    async function deleteAllReferencesAndHistory() {
+      const confirmed = confirm(
+        "⚠️ DANGER: Delete All References & Clear History?\n\n" +
+        "This action will:\n" +
+        "1. Remove approved reference images and configured regions from ALL profiles.\n" +
+        "2. Permanently delete all inspection audit history records.\n" +
+        "3. Reset operational quality statistics.\n\n" +
+        "Do you want to proceed?"
+      );
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch('/profiles/references/all', {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        alert(`Success: All reference baselines and ${data.cleared_inspections_count || 0} inspection records have been cleared.`);
+        await loadProfiles();
+        await loadHistory();
+        await loadOperationalStatistics();
+      } catch (err) {
+        alert('Failed to clear references and history: ' + err.message);
+      }
+    }
+
+    async function clearInspectionHistory() {
+      const confirmed = confirm(
+        "Clear all inspection audit history?\n\n" +
+        "This will permanently remove all past inspection records and reset operational statistics.\n" +
+        "Configured profiles and reference photographs will remain intact."
+      );
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch('/inspections', {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        alert(`Success: Cleared ${data.deleted_count || 0} inspection records.`);
+        await loadHistory();
+        await loadOperationalStatistics();
+      } catch (err) {
+        alert('Failed to clear history: ' + err.message);
       }
     }
 

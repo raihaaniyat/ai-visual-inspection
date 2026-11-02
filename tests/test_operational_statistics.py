@@ -449,3 +449,80 @@ def test_api_key_automatic_fallback_on_quota_limit(monkeypatch):
     assert called_keys == ["primary_key_123", "backup_key_456"]
     assert res.verdict == "PASS"
     assert "All 1 inspection criteria satisfied" in res.verdict_reason
+
+
+def test_clear_all_inspections_endpoint(monkeypatch, tmp_path):
+    """Verifies DELETE /inspections wipes inspection audit history."""
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path / "clear_storage"))
+    init_db()
+
+    save_inspection(
+        profile_id="prof_general_inspection",
+        profile_version=1,
+        verdict="PASS",
+        verdict_reason="All OK",
+        findings=[],
+        counts_summary={"total": 0, "satisfied": 0, "failed": 0, "uncertain": 0},
+        engine="Inspection Engine",
+        model_identifier="Inspection Engine",
+        inference_latency_ms=80.0,
+        total_latency_ms=100.0,
+    )
+    client = TestClient(app)
+    inspections_before = client.get("/inspections").json()
+    assert len(inspections_before) >= 1
+
+    # Call DELETE /inspections
+    del_res = client.delete("/inspections")
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "cleared"
+
+    inspections_after = client.get("/inspections").json()
+    assert len(inspections_after) == 0
+
+    stats = client.get("/reports/statistics").json()
+    assert stats["completed_inspections"] == 0
+    assert stats["total_attempts"] == 0
+
+
+def test_delete_all_references_endpoint(monkeypatch, tmp_path):
+    """
+    Verifies DELETE /profiles/references/all:
+    1. Resets reference_image_id to None on all profiles.
+    2. Increments profile version.
+    3. Purges all inspection history.
+    """
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path / "delete_all_refs_storage"))
+    init_db()
+
+    save_inspection(
+        profile_id="prof_general_inspection",
+        profile_version=1,
+        verdict="REJECT",
+        verdict_reason="Missing fastener",
+        findings=[],
+        counts_summary={"total": 1, "satisfied": 0, "failed": 1, "uncertain": 0},
+        engine="Inspection Engine",
+        model_identifier="Inspection Engine",
+        inference_latency_ms=90.0,
+        total_latency_ms=120.0,
+    )
+    client = TestClient(app)
+    assert len(client.get("/inspections").json()) >= 1
+
+    # Call DELETE /profiles/references/all
+    del_res = client.delete("/profiles/references/all")
+    assert del_res.status_code == 200
+    data = del_res.json()
+    assert data["status"] == "references_and_history_cleared"
+    assert "cleared_profiles_count" in data
+    assert "cleared_inspections_count" in data
+
+    # Verify history is purged
+    assert len(client.get("/inspections").json()) == 0
+
+    # Verify all profiles have reference_image_id == None
+    profiles = client.get("/profiles").json()
+    for p in profiles:
+        assert p["reference_image_id"] is None
+        assert p["reference_corners"] is None
