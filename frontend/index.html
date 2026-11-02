@@ -1019,7 +1019,11 @@
             <div class="empty-state" id="refEmptyPlaceholder">
               <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><circle cx="12" cy="12" r="3"/></svg>
               <div class="empty-state-title">No Golden Reference Assigned</div>
-              <div class="empty-state-desc">Upload an approved reference photograph in Profiles & References to enable inspection.</div>
+              <div class="empty-state-desc">Upload an approved reference photograph to establish the baseline and enable automated inspection.</div>
+              <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="if(currentProfile) uploadReferenceForProfile(currentProfile.profile_id)">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Upload Approved Reference</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1652,7 +1656,13 @@
           <td>${p.checklist ? p.checklist.length : 0} acceptance checks</td>
           <td>${formatTime(p.updated_at || p.created_at)}</td>
           <td>
-            <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select for Inspection</button>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+              <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select for Inspection</button>
+              <button class="btn" onclick="uploadReferenceForProfile('${p.profile_id}')" title="Upload or Replace Approved Reference">
+                <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle; margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>${p.reference_image_id ? 'Replace Ref' : 'Upload Ref'}</span>
+              </button>
+            </div>
           </td>
         </tr>
       `).join('');
@@ -1674,9 +1684,16 @@
       const refSubtitle = document.getElementById('refImageSubtitle');
 
       if (currentProfile.reference_image_id) {
+        refImg.onload = () => {
+          refImg.style.display = 'block';
+          refPlaceholder.style.display = 'none';
+        };
+        refImg.onerror = () => {
+          refImg.style.display = 'none';
+          refPlaceholder.style.display = 'flex';
+          refSubtitle.innerText = 'Approved reference could not be loaded.';
+        };
         refImg.src = `/profiles/${currentProfile.profile_id}/reference-image?t=${Date.now()}`;
-        refImg.style.display = 'block';
-        refPlaceholder.style.display = 'none';
         refSubtitle.innerText = `Baseline Golden Reference (v${currentProfile.version})`;
       } else {
         refImg.style.display = 'none';
@@ -1911,12 +1928,14 @@
 
       // Annotated Overlays
       if (insp.annotated_image_png_base64) {
-        document.getElementById('annotatedDisplay').src = `data:image/png;base64,${insp.annotated_image_png_base64}`;
+        const mime = insp.annotated_image_png_base64.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+        document.getElementById('annotatedDisplay').src = `data:${mime};base64,${insp.annotated_image_png_base64}`;
       }
 
       // Difference Map
       if (insp.opencv_diff_png_base64) {
-        document.getElementById('diffDisplay').src = `data:image/png;base64,${insp.opencv_diff_png_base64}`;
+        const diffMime = insp.opencv_diff_png_base64.startsWith('/9j/') ? 'image/jpeg' : 'image/png';
+        document.getElementById('diffDisplay').src = `data:${diffMime};base64,${insp.opencv_diff_png_base64}`;
         if (!insp.difference_map_reliable) {
           document.getElementById('diffSubtitle').innerText = 'Reference comparison unreliable (disparity detected)';
         } else {
@@ -2088,23 +2107,26 @@
       const fileInput = document.getElementById('newProfFile');
       if (!name) { alert('Profile name is required'); return; }
 
-      const formData = new FormData();
-      formData.append('name', name);
-      formData.append('description', desc);
-      formData.append('checklist_json', JSON.stringify([]));
-      formData.append('regions_json', JSON.stringify([]));
-      if (fileInput.files[0]) {
-        formData.append('reference_file', fileInput.files[0]);
-        formData.append('reference_image', fileInput.files[0]);
-      }
-
       const saveBtn = document.querySelector('#profileModal .btn-primary');
       if (saveBtn) {
         saveBtn.disabled = true;
-        saveBtn.innerText = 'Uploading & Saving...';
+        saveBtn.innerText = 'Compressing & Saving...';
       }
 
       try {
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('description', desc);
+        formData.append('checklist_json', JSON.stringify([]));
+        formData.append('regions_json', JSON.stringify([]));
+
+        if (fileInput.files[0]) {
+          const compRef = await compressImageIfExceedsLimit(fileInput.files[0], 2048, 0.90);
+          formData.append('reference_file', compRef);
+          formData.append('reference_image', compRef);
+          formData.append('file', compRef);
+        }
+
         const res = await fetch('/profiles', {
           method: 'POST',
           body: formData
@@ -2127,6 +2149,39 @@
           saveBtn.innerText = 'Save Profile';
         }
       }
+    }
+
+    async function uploadReferenceForProfile(profileId) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const compFile = await compressImageIfExceedsLimit(file, 2048, 0.90);
+          const formData = new FormData();
+          formData.append('reference_file', compFile);
+          formData.append('reference_image', compFile);
+          formData.append('file', compFile);
+
+          const res = await fetch(`/profiles/${profileId}/reference`, {
+            method: 'POST',
+            body: formData,
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to upload reference');
+          }
+          await loadProfiles();
+          if (currentProfile && currentProfile.profile_id === profileId) {
+            onInspectProfileChange();
+          }
+        } catch (err) {
+          alert('Upload failed: ' + err.message);
+        }
+      };
+      input.click();
     }
 
     function formatTime(isoStr) {

@@ -596,14 +596,18 @@ def get_profile_reference_image(profile_id: str):
     if not img:
         raise HTTPException(404, "Reference image file missing from storage.")
 
+    disp_img = img.copy()
+    if max(disp_img.size) > 1600:
+        disp_img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    disp_img.convert("RGB").save(buf, format="JPEG", quality=90, optimize=True)
     img_bytes = buf.getvalue()
     return Response(
         content=img_bytes,
-        media_type="image/png",
+        media_type="image/jpeg",
         headers={
-            "Cache-Control": "public, max-age=60",
+            "Cache-Control": "public, max-age=120",
             "Content-Length": str(len(img_bytes)),
         },
     )

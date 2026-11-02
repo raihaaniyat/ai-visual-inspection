@@ -195,8 +195,11 @@ def build_error_inspection_response(
     clean_ann_b64 = None
     if orig_test_image:
         try:
+            disp_orig = orig_test_image.copy()
+            if max(disp_orig.size) > 1280:
+                disp_orig.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
             buf = io.BytesIO()
-            orig_test_image.save(buf, format="PNG")
+            disp_orig.convert("RGB").save(buf, format="JPEG", quality=85, optimize=True)
             clean_ann_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         except Exception:
             clean_ann_b64 = None
@@ -741,17 +744,28 @@ Return ONLY a valid JSON object matching this schema:
             # Preserve original photograph as-is without cropping or distortion
             annotated_img = test_image
 
+        # Constrain display overlays to crisp dimensions & JPEG compression
+        # to ensure the full inspection response stays well within Vercel's 4.5MB serverless limit
+        disp_ann = annotated_img.copy()
+        if max(disp_ann.size) > 1280:
+            disp_ann.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
         buf_ann = io.BytesIO()
-        annotated_img.save(buf_ann, format="PNG")
+        disp_ann.convert("RGB").save(buf_ann, format="JPEG", quality=85, optimize=True)
         annotated_b64 = base64.b64encode(buf_ann.getvalue()).decode("utf-8")
 
         # Encode rectified images separately
+        disp_rref = rect_ref.copy()
+        if max(disp_rref.size) > 800:
+            disp_rref.thumbnail((800, 800), Image.Resampling.LANCZOS)
         buf_rref = io.BytesIO()
-        rect_ref.save(buf_rref, format="PNG")
+        disp_rref.convert("RGB").save(buf_rref, format="JPEG", quality=85, optimize=True)
         rect_ref_b64 = base64.b64encode(buf_rref.getvalue()).decode("utf-8")
 
+        disp_rtest = rect_test.copy()
+        if max(disp_rtest.size) > 800:
+            disp_rtest.thumbnail((800, 800), Image.Resampling.LANCZOS)
         buf_rtest = io.BytesIO()
-        rect_test.save(buf_rtest, format="PNG")
+        disp_rtest.convert("RGB").save(buf_rtest, format="JPEG", quality=85, optimize=True)
         rect_test_b64 = base64.b64encode(buf_rtest.getvalue()).decode("utf-8")
 
         if not geom_ok:
