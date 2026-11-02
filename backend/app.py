@@ -620,7 +620,7 @@ def get_profile_reference_image(profile_id: str):
         content=img_bytes,
         media_type="image/jpeg",
         headers={
-            "Cache-Control": "public, max-age=120",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Content-Length": str(len(img_bytes)),
         },
     )
