@@ -590,9 +590,9 @@ Return ONLY a valid JSON object matching this schema:
 
     contents_list.append(prompt_content)
 
-    # Attach high-resolution crops
+    # Attach candidate difference crops (max 2 to preserve sub-3s serverless response times)
     crops_to_attach = regions if regions else [ExpectedRegion(region_id=f"diff_{i}", label=f"Difference Spot #{i+1}", box=b) for i, b in enumerate(diff_boxes)]
-    for r in crops_to_attach[:6]:
+    for r in crops_to_attach[:2]:
         crop_img = _crop_region(rect_test, r.box)
         c_io = io.BytesIO()
         crop_img.save(c_io, format="JPEG", quality=85)

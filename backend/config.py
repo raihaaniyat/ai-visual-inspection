@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Vision API (Server-side vision inspection)
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     gemini_api_key_fallback: str = Field(default="", alias="GEMINI_API_KEY_FALLBACK")
-    gemini_model: str = Field(default="gemini-3.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.5-flash-lite", alias="GEMINI_MODEL")
 
     # Durable Storage: PostgreSQL / Supabase
     database_url: str = Field(default="", alias="DATABASE_URL")
