@@ -2565,11 +2565,6 @@
         alert('Failed to clear history: ' + err.message);
       }
     }
-        await loadOperationalStatistics();
-      } catch (err) {
-        alert('Failed to clear history: ' + err.message);
-      }
-    }
 
     function formatTime(isoStr) {
       if (!isoStr) return '-';
