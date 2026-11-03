@@ -46,8 +46,11 @@ from PIL import Image, ImageOps
 
 from backend.config import settings
 from backend.default_profiles import (
+    PERMANENT_PROFILE_IDS,
+    _load_library_image,
     create_synthetic_demo_board_image,
     seed_general_inspection_profile,
+    seed_permanent_reference_library,
     seed_physical_experiment_profile,
 )
 from backend.geometry import compute_mapping_diagnostics, rectify_workpiece
@@ -122,6 +125,7 @@ def check_rate_limit_and_auth(request: Request) -> None:
 async def lifespan(app: FastAPI):
     init_db()
     try:
+        seed_permanent_reference_library()
         seed_physical_experiment_profile()
         seed_general_inspection_profile()
     except Exception as exc:
@@ -615,12 +619,27 @@ def get_profile_reference_image(profile_id: str):
     if not profile:
         raise HTTPException(404, f"Profile '{profile_id}' not found.")
 
-    if not profile.reference_image_id:
-        raise HTTPException(404, "No approved reference image has been uploaded for this profile yet.")
+    img = None
+    if profile.reference_image_id:
+        img = load_image_file(profile.reference_image_id)
 
-    img = load_image_file(profile.reference_image_id)
+    # Automatic durable fallback for permanent library profiles
+    if not img and profile.profile_id in PERMANENT_PROFILE_IDS:
+        img_name_map = {
+            "prof_speaker": "speaker.png",
+            "prof_transistor": "transistor.png",
+            "prof_screws_plywood": "screws_plywood.jpg",
+            "prof_cable_assembly": "cable_assembly.png",
+            "prof_zipper": "zipper.png",
+            "prof_physical_6screw": "screws_plywood.jpg",
+            "prof_general_inspection": "screws_plywood.jpg",
+        }
+        filename = img_name_map.get(profile.profile_id)
+        if filename:
+            img = _load_library_image(filename)
+
     if not img:
-        raise HTTPException(404, "Reference image file missing from storage.")
+        raise HTTPException(404, "No approved reference image has been uploaded for this profile yet.")
 
     disp_img = img.copy()
     if max(disp_img.size) > 1600:
@@ -659,11 +678,23 @@ async def run_profile_inspection(
     if not profile:
         raise HTTPException(404, f"Profile '{profile_id}' not found.")
 
-    # Requirement 1: Until an approved reference is uploaded, disable inspection
-    if not profile.reference_image_id:
-        raise HTTPException(400, "Add an approved reference first.")
+    ref_img = load_image_file(profile.reference_image_id) if profile.reference_image_id else None
+    if not ref_img and profile.profile_id in PERMANENT_PROFILE_IDS:
+        img_name_map = {
+            "prof_speaker": "speaker.png",
+            "prof_transistor": "transistor.png",
+            "prof_screws_plywood": "screws_plywood.jpg",
+            "prof_cable_assembly": "cable_assembly.png",
+            "prof_zipper": "zipper.png",
+            "prof_physical_6screw": "screws_plywood.jpg",
+            "prof_general_inspection": "screws_plywood.jpg",
+        }
+        filename = img_name_map.get(profile.profile_id)
+        if filename:
+            ref_img = _load_library_image(filename)
 
-    ref_img = load_image_file(profile.reference_image_id)
+    if not ref_img:
+        raise HTTPException(400, "Add an approved reference first.")
     if not ref_img:
         raise HTTPException(400, "Add an approved reference first.")
 

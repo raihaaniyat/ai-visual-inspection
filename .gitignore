@@ -21,6 +21,8 @@ eggs/
 
 # Local storage, databases and uploads
 backend/data/
+!backend/data/reference_library/
+!backend/data/reference_library/**
 *.db
 *.sqlite
 *.sqlite3

@@ -364,15 +364,130 @@
     .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1rem; }
 
     @media (max-width: 1100px) {
-      .grid-2 { grid-template-columns: 1fr; }
-      .grid-4 { grid-template-columns: repeat(2, 1fr); }
-      .grid-6 { grid-template-columns: repeat(3, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; gap: 1.25rem; }
+      .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .grid-6 { grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+      .image-viewport { height: 380px; }
     }
-    @media (max-width: 640px) {
-      .grid-4 { grid-template-columns: 1fr; }
-      .grid-6 { grid-template-columns: repeat(2, 1fr); }
-      main { padding: 1rem; }
-      header { flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+    @media (max-width: 768px) {
+      header {
+        padding: 0.5rem 0.75rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .brand-container {
+        height: 34px;
+      }
+      .brand-logo-img {
+        max-height: 28px;
+        width: auto;
+      }
+      .nav-tabs {
+        width: 100%;
+        order: 3;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-top: 0.4rem;
+        border-top: 1px solid var(--border);
+        gap: 0.3rem;
+        scrollbar-width: none;
+      }
+      .nav-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .nav-btn {
+        padding: 0.45rem 0.7rem;
+        font-size: 0.78rem;
+        flex-shrink: 0;
+        min-height: 36px;
+      }
+      .header-actions {
+        order: 2;
+        gap: 0.4rem;
+      }
+      .status-pill {
+        padding: 0.2rem 0.45rem;
+        font-size: 0.7rem;
+      }
+      main {
+        padding: 0.75rem 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+      .card {
+        padding: 0.85rem;
+        border-radius: 8px;
+      }
+      .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+      }
+      .card-header > div:last-child {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+      .image-viewport {
+        height: 300px;
+      }
+      .style-legend-box {
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.72rem;
+      }
+      .grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+      }
+      .grid-6 {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+      }
+      .kpi-card {
+        padding: 0.65rem 0.75rem;
+      }
+      .kpi-value {
+        font-size: 1.3rem;
+      }
+      .verdict-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem;
+      }
+      .verdict-title {
+        font-size: 1.35rem;
+      }
+      .btn {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.8rem;
+        min-height: 38px;
+      }
+      .btn-primary {
+        min-height: 42px;
+      }
+      .modal-box {
+        width: 96%;
+        padding: 1rem;
+        gap: 1rem;
+      }
+    }
+    @media (max-width: 480px) {
+      .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .grid-6 {
+        grid-template-columns: 1fr;
+      }
+      .image-viewport {
+        height: 250px;
+      }
+      .kpi-card {
+        padding: 0.6rem;
+      }
     }
 
     /* Buttons */
@@ -1442,6 +1557,20 @@
     let currentLightboxZoom = 1.0;
     let lastTrendData = [];
 
+    // Permanent Standard Reference Library profiles (Protected & Never Deleted)
+    const PERMANENT_PROFILES = [
+      'prof_speaker',
+      'prof_transistor',
+      'prof_screws_plywood',
+      'prof_cable_assembly',
+      'prof_zipper',
+      'prof_physical_6screw',
+      'prof_general_inspection'
+    ];
+    function isProtectedProfile(id) {
+      return PERMANENT_PROFILES.includes(id);
+    }
+
     // Workpiece corner handles for alignment [tl, tr, br, bl] in normalized [0, 1] coords
     let currentWorkpieceCorners = [
       { x: 0.1, y: 0.1 },
@@ -1666,9 +1795,12 @@
       const select = document.getElementById('inspectProfileSelect');
       const targetId = preferredId || select.value || (currentProfile ? currentProfile.profile_id : (profilesList[0] ? profilesList[0].profile_id : null));
 
-      select.innerHTML = profilesList.map(p => `
-        <option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version}${p.reference_image_id ? '' : ' - no reference'})</option>
-      `).join('');
+      select.innerHTML = profilesList.map(p => {
+        const isPerm = isProtectedProfile(p.profile_id);
+        const refLabel = (p.reference_image_id || isPerm) ? '' : ' - no reference';
+        const tagLabel = isPerm ? ' [Standard]' : '';
+        return `<option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version}${tagLabel}${refLabel})</option>`;
+      }).join('');
 
       if (targetId && profilesList.some(p => p.profile_id === targetId)) {
         select.value = targetId;
@@ -1680,32 +1812,43 @@
 
       // Populate Profiles Table in tab-profiles
       const tbody = document.getElementById('profilesTableBody');
-      tbody.innerHTML = profilesList.map(p => `
+      tbody.innerHTML = profilesList.map(p => {
+        const isPerm = isProtectedProfile(p.profile_id);
+        return `
         <tr>
-          <td><strong>${escapeHtml(p.name)}</strong><br><span style="font-size:0.75rem; color:var(--text-faint);">${escapeHtml(p.description || '')}</span></td>
+          <td>
+            <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+              <strong>${escapeHtml(p.name)}</strong>
+              ${isPerm ? '<span class="tag pass" style="font-size:0.65rem; padding:0.15rem 0.4rem;">Standard Baseline</span>' : ''}
+            </div>
+            <span style="font-size:0.75rem; color:var(--text-faint);">${escapeHtml(p.description || '')}</span>
+          </td>
           <td><span class="tag neutral">v${p.version}</span></td>
-          <td>${p.reference_image_id ? '<span class="tag pass">Approved Reference</span>' : '<span class="tag reject">Missing Reference</span>'}</td>
+          <td>${(p.reference_image_id || isPerm) ? '<span class="tag pass">Approved Reference</span>' : '<span class="tag reject">Missing Reference</span>'}</td>
           <td>${p.checklist ? p.checklist.length : 0} acceptance checks</td>
           <td>${formatTime(p.updated_at || p.created_at)}</td>
           <td>
             <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
               <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select</button>
-              <button class="btn" onclick="uploadReferenceForProfile('${p.profile_id}')" title="Upload or Replace Approved Reference">
+              <button class="btn" onclick="uploadReferenceForProfile('${p.profile_id}')" title="Upload or Replace Reference Photograph">
                 <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle; margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                <span>${p.reference_image_id ? 'Replace Ref' : 'Upload Ref'}</span>
+                <span>${(p.reference_image_id || isPerm) ? 'Update Ref' : 'Upload Ref'}</span>
               </button>
-              ${p.reference_image_id ? `
+              ${!isPerm && p.reference_image_id ? `
                 <button class="btn" onclick="deleteReferenceForProfile('${p.profile_id}')" title="Delete Reference Image" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);">
                   <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>
               ` : ''}
-              <button class="btn" onclick="deleteProfile('${p.profile_id}', '${escapeHtml(p.name)}')" title="Delete Profile" style="color:var(--text-faint);">
-                <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+              ${!isPerm ? `
+                <button class="btn" onclick="deleteProfile('${p.profile_id}', '${escapeHtml(p.name)}')" title="Delete Profile" style="color:var(--text-faint);">
+                  <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              ` : ''}
             </div>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function selectProfileForInspection(profileId) {
@@ -1725,11 +1868,13 @@
       const btnZoom = document.getElementById('btnRefZoom');
       const btnDelete = document.getElementById('btnRefDelete');
       const btnUploadText = document.getElementById('btnRefUploadText');
+      const isPerm = isProtectedProfile(currentProfile.profile_id);
 
-      if (currentProfile.reference_image_id) {
+      if (currentProfile.reference_image_id || isPerm) {
         if (btnZoom) btnZoom.style.display = 'inline-flex';
-        if (btnDelete) btnDelete.style.display = 'inline-flex';
-        if (btnUploadText) btnUploadText.innerText = 'Replace Reference';
+        // Permanent standard baselines cannot be deleted
+        if (btnDelete) btnDelete.style.display = isPerm ? 'none' : 'inline-flex';
+        if (btnUploadText) btnUploadText.innerText = 'Update Reference';
 
         refImg.onload = () => {
           refImg.style.display = 'block';
@@ -1749,7 +1894,9 @@
           refImg.style.display = 'block';
           refPlaceholder.style.display = 'none';
         }
-        refSubtitle.innerText = `Baseline Golden Reference (v${currentProfile.version})`;
+        refSubtitle.innerText = isPerm
+          ? `Standard Golden Reference (v${currentProfile.version}) — Permanent Baseline`
+          : `Approved Golden Reference (v${currentProfile.version})`;
       } else {
         if (btnZoom) btnZoom.style.display = 'none';
         if (btnDelete) btnDelete.style.display = 'none';
@@ -2298,6 +2445,10 @@
     }
 
     async function deleteReferenceForProfile(profileId) {
+      if (isProtectedProfile(profileId)) {
+        alert("This profile is a permanent reference standard. Its approved golden baseline cannot be deleted.");
+        return;
+      }
       const prof = profilesList.find(p => p.profile_id === profileId) || currentProfile;
       const profName = prof ? prof.name : profileId;
       if (!confirm(`Remove approved reference photograph from "${profName}"?\n\nAutomated visual inspection will be paused until a new baseline is uploaded.`)) {
@@ -2319,12 +2470,17 @@
         currentProfile = updated;
         renderProfilesUI(profileId);
         selectProfileForInspection(profileId);
+        alert(`Approved reference photograph removed from "${profName}".`);
       } catch (err) {
         alert('Failed to delete reference: ' + err.message);
       }
     }
 
     async function deleteProfile(profileId, name) {
+      if (isProtectedProfile(profileId)) {
+        alert(`"${name}" is a protected standard profile and cannot be deleted.`);
+        return;
+      }
       if (!confirm(`Permanently delete profile "${name}"?\n\nThis will remove the configuration and all inspection audit records associated with this profile.`)) {
         return;
       }
@@ -2347,11 +2503,12 @@
 
     async function deleteAllReferencesAndHistory() {
       const confirmed = confirm(
-        "⚠️ DANGER: Delete All References & Clear History?\n\n" +
+        "⚠️ Reset Custom References & Clear History?\n\n" +
         "This action will:\n" +
-        "1. Remove approved reference images and configured regions from ALL profiles.\n" +
+        "1. Reset reference images on all custom user profiles.\n" +
         "2. Permanently delete all inspection audit history records.\n" +
         "3. Reset operational quality statistics.\n\n" +
+        "Note: Permanent reference standards (Speaker, Transistor, Screws in Plywood) will be safely preserved.\n\n" +
         "Do you want to proceed?"
       );
       if (!confirmed) return;
@@ -2365,7 +2522,12 @@
           throw new Error(errData.detail || `Server error HTTP ${res.status}`);
         }
         const data = await res.json();
-        alert(`Success: All reference baselines and ${data.cleared_inspections_count || 0} inspection records have been cleared.`);
+        const count = data.cleared_inspections_count || 0;
+        alert(
+          `Success: Custom reference baselines have been reset.\n` +
+          `Permanent reference library (Speaker, Transistor, Screws in Plywood) preserved.\n` +
+          (count > 0 ? `${count} inspection audit record(s) cleared.` : 'Inspection audit log is now clean.')
+        );
         await loadProfiles();
         await loadHistory();
         await loadOperationalStatistics();
@@ -2391,8 +2553,18 @@
           throw new Error(errData.detail || `Server error HTTP ${res.status}`);
         }
         const data = await res.json();
-        alert(`Success: Cleared ${data.deleted_count || 0} inspection records.`);
+        const delCount = data.deleted_count || 0;
+        alert(
+          delCount > 0
+            ? `Success: ${delCount} inspection record(s) cleared.`
+            : `Inspection audit log is now clean.`
+        );
         await loadHistory();
+        await loadOperationalStatistics();
+      } catch (err) {
+        alert('Failed to clear history: ' + err.message);
+      }
+    }
         await loadOperationalStatistics();
       } catch (err) {
         alert('Failed to clear history: ' + err.message);

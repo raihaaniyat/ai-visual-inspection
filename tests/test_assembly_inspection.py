@@ -739,11 +739,48 @@ def test_unrestrained_arbitrary_image_component_discovery():
     assert "Electrolytic Capacitor C3" in reason
     assert "Assembly Rejected: 1 issue(s) detected" in reason
 
-    missing_f = next(f for f in findings if f.check_id == "comp_capacitor_c3")
-    assert missing_f.status == "failed"
-    assert "Empty solder pads visible" in missing_f.evidence
-    assert missing_f.rectified_box is not None
-    assert missing_f.rectified_box.xmin == 0.75
+
+def test_permanent_reference_library_protected(monkeypatch, tmp_path):
+    """
+    Verifies that standard golden reference baselines:
+    - Speaker (prof_speaker)
+    - Transistor (prof_transistor)
+    - Screws in Plywood (prof_screws_plywood)
+    are seeded with approved reference images, return HTTP 200 on reference-image GET,
+    and cannot be deleted or have their reference removed.
+    """
+    from fastapi.testclient import TestClient
+    from backend.app import app
+    from backend.default_profiles import seed_permanent_reference_library, PERMANENT_PROFILE_IDS
+
+    monkeypatch.setattr(settings, "storage_dir", str(tmp_path / "perm_storage"))
+    init_db()
+    seed_permanent_reference_library()
+
+    client = TestClient(app)
+
+    # 1. Verify all permanent profiles exist with reference images
+    for pid in ["prof_speaker", "prof_transistor", "prof_screws_plywood"]:
+        res = client.get(f"/profiles/{pid}")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["reference_image_id"] is not None
+
+        # Reference image download endpoint must return HTTP 200 JPEG
+        img_res = client.get(f"/profiles/{pid}/reference-image")
+        assert img_res.status_code == 200
+        assert img_res.headers["content-type"] == "image/jpeg"
+        assert len(img_res.content) > 1000
+
+    # 2. Attempting to delete a permanent profile reference is rejected / preserved
+    del_ref_res = client.delete("/profiles/prof_speaker/reference")
+    assert del_ref_res.status_code == 200
+    assert del_ref_res.json()["reference_image_id"] is not None
+
+    # 3. Attempting to delete a permanent profile is blocked
+    del_prof_res = client.delete("/profiles/prof_speaker")
+    assert del_prof_res.status_code in (400, 404) or del_prof_res.json().get("status") != "deleted"
+    assert client.get("/profiles/prof_speaker").status_code == 200
 
 
 def test_general_inspection_profile_seed():

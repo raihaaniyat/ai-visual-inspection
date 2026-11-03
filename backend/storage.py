@@ -40,6 +40,17 @@ from backend.schemas import (
     AccuracyReportResponse,
 )
 
+# Permanent standard reference profiles that must never be deleted
+PERMANENT_PROFILE_IDS = {
+    "prof_speaker",
+    "prof_transistor",
+    "prof_screws_plywood",
+    "prof_cable_assembly",
+    "prof_zipper",
+    "prof_physical_6screw",
+    "prof_general_inspection",
+}
+
 
 def _get_db_path() -> Path:
     return settings.storage_dir_path / "inspector.db"
@@ -607,11 +618,16 @@ def remove_profile_reference(profile_id: str) -> ProfileResponse:
     """
     Removes approved reference image and associated corners from profile.
     Clears reference_image_id, reference_corners, increments version, and invalidates old inspections.
+    Protected system reference library profiles are permanently preserved.
     """
     init_db()
     existing = get_profile(profile_id)
     if not existing:
         raise ValueError(f"Profile {profile_id} does not exist")
+
+    if profile_id in PERMANENT_PROFILE_IDS:
+        logger.info("Preserving protected permanent reference baseline for %s", profile_id)
+        return existing
 
     now_iso = datetime.now(timezone.utc).isoformat()
     new_version = existing.version + 1
@@ -840,6 +856,10 @@ def list_profiles() -> list[ProfileResponse]:
 
 
 def delete_profile(profile_id: str) -> bool:
+    if profile_id in PERMANENT_PROFILE_IDS:
+        logger.warning("Attempted to delete protected permanent baseline profile: %s", profile_id)
+        return False
+
     init_db()
     db_path = _get_db_path()
     with sqlite3.connect(db_path) as conn:
@@ -893,26 +913,36 @@ def clear_all_inspections() -> int:
 def delete_all_references() -> dict:
     """
     Clears approved reference photographs, workpiece corners, and expected regions
-    across all profiles in local SQLite and remote Supabase, increments profile versions,
-    and purges all inspection audit history (since all golden baselines have been invalidated).
+    across all custom user profiles in local SQLite and remote Supabase, increments versions,
+    and purges all inspection audit history.
+    
+    Protected system reference profiles (Speaker, Transistor, Screws in Plywood, etc.)
+    are permanently preserved and NEVER deleted.
     """
     init_db()
     now_iso = datetime.now(timezone.utc).isoformat()
     db_path = _get_db_path()
+    perm_placeholders = ",".join("?" for _ in PERMANENT_PROFILE_IDS)
+    perm_tuple = tuple(PERMANENT_PROFILE_IDS)
+
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM profiles")
-        profile_count = cursor.fetchone()[0]
         cursor.execute(
-            """
+            f"SELECT COUNT(*) FROM profiles WHERE profile_id NOT IN ({perm_placeholders})",
+            perm_tuple,
+        )
+        custom_count = cursor.fetchone()[0]
+        cursor.execute(
+            f"""
             UPDATE profiles 
             SET reference_image_id = NULL,
                 reference_corners_json = NULL,
                 regions_json = '[]',
                 version = version + 1,
                 updated_at = ?
+            WHERE profile_id NOT IN ({perm_placeholders})
             """,
-            (now_iso,),
+            (now_iso, *perm_tuple),
         )
         conn.commit()
 
@@ -928,22 +958,24 @@ def delete_all_references() -> dict:
                 "regions_json": "[]",
                 "updated_at": now_iso,
             }
+            perm_joined = ",".join(PERMANENT_PROFILE_IDS)
             httpx.patch(
-                f"{settings.supabase_url}/rest/v1/profiles?profile_id=not.is.null",
+                f"{settings.supabase_url}/rest/v1/profiles?profile_id=not.in.({perm_joined})",
                 headers=headers,
                 json=patch_payload,
                 timeout=10,
             )
-            logger.info("Cleared all profile references in Supabase")
+            logger.info("Cleared custom profile references in Supabase")
         except Exception as exc:
-            logger.debug("Supabase clear all references error: %s", exc)
+            logger.debug("Supabase clear custom references error: %s", exc)
 
     cleared_inspections = clear_all_inspections()
 
     return {
         "status": "references_and_history_cleared",
-        "cleared_profiles_count": profile_count,
+        "cleared_custom_profiles_count": custom_count,
         "cleared_inspections_count": cleared_inspections,
+        "preserved_permanent_profiles": sorted(list(PERMANENT_PROFILE_IDS)),
     }
 
 

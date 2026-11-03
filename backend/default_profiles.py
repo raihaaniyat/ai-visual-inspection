@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from backend.schemas import CheckItem, ExpectedRegion, NormalizedBox, WorkpieceCorners
 from backend.storage import (
@@ -22,6 +22,228 @@ from backend.storage import (
     save_image_file,
 )
 from backend.config import settings
+
+# Permanent standard reference profiles that must never be deleted
+PERMANENT_PROFILE_IDS = {
+    "prof_speaker",
+    "prof_transistor",
+    "prof_screws_plywood",
+    "prof_cable_assembly",
+    "prof_zipper",
+    "prof_physical_6screw",
+    "prof_general_inspection",
+}
+
+
+def _load_library_image(filename: str) -> Image.Image | None:
+    """Loads a reference library image from version-controlled storage."""
+    base_dir = Path(__file__).resolve().parent
+    search_paths = [
+        base_dir / "data" / "reference_library" / filename,
+        base_dir.parent / "backend" / "data" / "reference_library" / filename,
+        base_dir.parent / "public" / "reference_library" / filename,
+        base_dir.parent / filename,
+    ]
+    for p in search_paths:
+        if p.exists():
+            try:
+                return ImageOps.exif_transpose(Image.open(p)).convert("RGB")
+            except Exception:
+                pass
+    return None
+
+
+def seed_permanent_reference_library() -> list[str]:
+    """
+    Seeds and permanently preserves the approved standard reference profiles:
+    - Speaker (driver cone, dust cap, surround suspension, solder terminals)
+    - Transistor (3-lead pins, heatsink mounting tab, epoxy encapsulation)
+    - Screws in Plywood (6-screw panel arrangement)
+    - Cable Assembly (connector housing, terminal pins, wire bundle)
+    - Zipper (interlocking teeth, slider stop, tape border)
+    
+    These golden baselines are protected and never deleted.
+    """
+    seeded_ids = []
+
+    # 1. Speaker Component Profile
+    speaker_img = _load_library_image("speaker.png")
+    speaker_checklist = [
+        CheckItem(
+            check_id="chk_spk_dust_cap",
+            check_type="presence",
+            description="Centre dust cap present, centered and undamaged",
+            expected_requirement="Centre spherical dust dome must be intact, securely glued, with no indentations or punctures.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_spk_cone",
+            check_type="presence",
+            description="Acoustic diaphragm cone intact without creases or tears",
+            expected_requirement="The main acoustic cone must be free of tears, deep creases, deformities, or foreign contamination.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_spk_surround",
+            check_type="presence",
+            description="Flexible roll surround suspension fully bonded to basket frame",
+            expected_requirement="The outer suspension ring must form a continuous 360-degree seal around the basket flange.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_spk_terminals",
+            check_type="presence",
+            description="Solder lug electrical terminals intact and accessible",
+            expected_requirement="Positive and negative solder terminals must be firmly attached to the chassis frame.",
+            required=True,
+        ),
+    ]
+    p_spk = create_or_save_profile(
+        name="Speaker Component Assembly",
+        description="Permanent golden baseline for driver cone, dust cap, surround suspension, and solder terminals.",
+        reference_image=speaker_img,
+        checklist=speaker_checklist,
+        regions=[],
+        profile_id="prof_speaker",
+    )
+    seeded_ids.append(p_spk.profile_id)
+
+    # 2. Transistor Semiconductor Package Profile
+    transistor_img = _load_library_image("transistor.png")
+    transistor_checklist = [
+        CheckItem(
+            check_id="chk_trn_pins",
+            check_type="count",
+            target_count=3,
+            description="All 3 terminal leads (emitter, base, collector) present and parallel",
+            expected_requirement="Package must have exactly 3 straight terminal pins with no bent or crossed leads.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_trn_heatsink",
+            check_type="presence",
+            description="Metal heatsink mounting flange intact with clear mounting hole",
+            expected_requirement="The rear metal tab must be flat, unbent, and free of burrs or mounting obstruction.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_trn_body",
+            check_type="presence",
+            description="Molded epoxy body intact with no chips, cracks, or voids",
+            expected_requirement="The plastic encapsulation body must be cleanly molded with no voids or thermal fractures.",
+            required=True,
+        ),
+    ]
+    p_trn = create_or_save_profile(
+        name="Transistor Semiconductor Package",
+        description="Permanent golden baseline for 3-lead alignment, metal heatsink mounting tab, and molded body.",
+        reference_image=transistor_img,
+        checklist=transistor_checklist,
+        regions=[],
+        profile_id="prof_transistor",
+    )
+    seeded_ids.append(p_trn.profile_id)
+
+    # 3. Screws in Plywood Profile
+    screws_img = _load_library_image("screws_plywood.jpg") or _load_library_image("6-screw panel.jpg")
+    screws_checklist = [
+        CheckItem(
+            check_id="chk_ply_count",
+            check_type="count",
+            target_count=6,
+            description="Total 6 countersunk screws seated in plywood panel",
+            expected_requirement="Verify that exactly 6 screws are installed in the wooden board substrate.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_ply_upper_row",
+            check_type="presence",
+            description="Upper row screws (left, centre, right) present and seated",
+            expected_requirement="Three screws must be seated across the upper row of the panel.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_ply_lower_row",
+            check_type="presence",
+            description="Lower row screws (left, centre, right) present and seated",
+            expected_requirement="Three screws must be seated across the lower row of the panel.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_ply_flush",
+            check_type="presence",
+            description="All screw heads countersunk flush with no stripped drive recesses",
+            expected_requirement="Screw heads must sit level with or below board surface with drive slots undamaged.",
+            required=True,
+        ),
+    ]
+    p_ply = create_or_save_profile(
+        name="Screws in Plywood (6-Point Panel)",
+        description="Permanent golden baseline for 6 countersunk screws installed in plywood board assembly.",
+        reference_image=screws_img,
+        checklist=screws_checklist,
+        regions=[],
+        profile_id="prof_screws_plywood",
+    )
+    seeded_ids.append(p_ply.profile_id)
+
+    # 4. Cable Assembly Profile
+    cable_img = _load_library_image("cable_assembly.png")
+    cable_checklist = [
+        CheckItem(
+            check_id="chk_cbl_connector",
+            check_type="presence",
+            description="Molded connector housing present and latch intact",
+            expected_requirement="Connector shell must be fully seated with locking tabs intact and undamaged.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_cbl_wires",
+            check_type="presence",
+            description="All insulated conductor wires retained without crimp pullout",
+            expected_requirement="Individual wire leads must be securely crimped into terminal cavities with no bare copper exposed.",
+            required=True,
+        ),
+    ]
+    p_cbl = create_or_save_profile(
+        name="Wire Harness & Cable Assembly",
+        description="Permanent golden baseline for connector housing, terminal pins, and insulated wiring bundle.",
+        reference_image=cable_img,
+        checklist=cable_checklist,
+        regions=[],
+        profile_id="prof_cable_assembly",
+    )
+    seeded_ids.append(p_cbl.profile_id)
+
+    # 5. Zipper Profile
+    zipper_img = _load_library_image("zipper.png")
+    zipper_checklist = [
+        CheckItem(
+            check_id="chk_zip_teeth",
+            check_type="presence",
+            description="Continuous interlocking teeth track with no missing elements",
+            expected_requirement="Zipper teeth must be uniform, evenly spaced, and fully engaged along the track length.",
+            required=True,
+        ),
+        CheckItem(
+            check_id="chk_zip_tape",
+            check_type="presence",
+            description="Woven tape fabric free of fraying, cuts, or misweave",
+            expected_requirement="Border tape weave must be intact with clean edge stitching.",
+            required=True,
+        ),
+    ]
+    p_zip = create_or_save_profile(
+        name="Continuous Zipper Track Assembly",
+        description="Permanent golden baseline for interlocking zipper teeth, tape border, and slider alignment.",
+        reference_image=zipper_img,
+        checklist=zipper_checklist,
+        regions=[],
+        profile_id="prof_zipper",
+    )
+    seeded_ids.append(p_zip.profile_id)
+
+    return seeded_ids
 
 
 # ==============================================================================

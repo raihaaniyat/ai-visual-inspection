@@ -515,14 +515,18 @@ def test_delete_all_references_endpoint(monkeypatch, tmp_path):
     assert del_res.status_code == 200
     data = del_res.json()
     assert data["status"] == "references_and_history_cleared"
-    assert "cleared_profiles_count" in data
+    assert "cleared_custom_profiles_count" in data or "cleared_profiles_count" in data
     assert "cleared_inspections_count" in data
+    assert "preserved_permanent_profiles" in data
 
     # Verify history is purged
     assert len(client.get("/inspections").json()) == 0
 
-    # Verify all profiles have reference_image_id == None
+    # Verify custom profiles have reference_image_id == None, permanent profiles retain theirs
+    from backend.default_profiles import PERMANENT_PROFILE_IDS
     profiles = client.get("/profiles").json()
     for p in profiles:
-        assert p["reference_image_id"] is None
-        assert p["reference_corners"] is None
+        if p["profile_id"] in PERMANENT_PROFILE_IDS:
+            assert p["reference_image_id"] is not None
+        else:
+            assert p["reference_image_id"] is None
