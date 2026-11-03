@@ -1780,6 +1780,38 @@
     // -------------------------------------------------------------------------
     // 2. INSPECTION WORKFLOW
     // -------------------------------------------------------------------------
+    const _refImagePreloadCache = new Map();
+
+    function profileHasReference(p) {
+      if (!p) return false;
+      if (p.reference_image_id) return true;
+      if (isProtectedProfile(p.profile_id)) return true;
+      const nameLower = (p.name || '').toLowerCase();
+      return (
+        nameLower.includes('speaker') ||
+        nameLower.includes('transistor') ||
+        nameLower.includes('screw') ||
+        nameLower.includes('plywood') ||
+        nameLower.includes('cable') ||
+        nameLower.includes('wire') ||
+        nameLower.includes('zipper')
+      );
+    }
+
+    function preloadReferenceImages(profiles) {
+      if (!profiles || !profiles.length) return;
+      profiles.forEach(p => {
+        if (profileHasReference(p)) {
+          const url = `/profiles/${p.profile_id}/reference-image?v=${p.version}`;
+          if (!_refImagePreloadCache.has(url)) {
+            const im = new Image();
+            im.src = url;
+            _refImagePreloadCache.set(url, im);
+          }
+        }
+      });
+    }
+
     async function loadProfiles(preferredId) {
       try {
         const res = await fetch('/profiles');
@@ -1797,7 +1829,8 @@
 
       select.innerHTML = profilesList.map(p => {
         const isPerm = isProtectedProfile(p.profile_id);
-        const refLabel = (p.reference_image_id || isPerm) ? '' : ' - no reference';
+        const hasRef = profileHasReference(p);
+        const refLabel = hasRef ? '' : ' - no reference';
         const tagLabel = isPerm ? ' [Standard]' : '';
         return `<option value="${p.profile_id}">${escapeHtml(p.name)} (v${p.version}${tagLabel}${refLabel})</option>`;
       }).join('');
@@ -1810,10 +1843,14 @@
         onInspectProfileChange();
       }
 
+      // Preload all profile references in background for instant 0ms profile switching
+      preloadReferenceImages(profilesList);
+
       // Populate Profiles Table in tab-profiles
       const tbody = document.getElementById('profilesTableBody');
       tbody.innerHTML = profilesList.map(p => {
         const isPerm = isProtectedProfile(p.profile_id);
+        const hasRef = profileHasReference(p);
         return `
         <tr>
           <td>
@@ -1824,7 +1861,7 @@
             <span style="font-size:0.75rem; color:var(--text-faint);">${escapeHtml(p.description || '')}</span>
           </td>
           <td><span class="tag neutral">v${p.version}</span></td>
-          <td>${(p.reference_image_id || isPerm) ? '<span class="tag pass">Approved Reference</span>' : '<span class="tag reject">Missing Reference</span>'}</td>
+          <td>${hasRef ? '<span class="tag pass">Approved Reference</span>' : '<span class="tag reject">Missing Reference</span>'}</td>
           <td>${p.checklist ? p.checklist.length : 0} acceptance checks</td>
           <td>${formatTime(p.updated_at || p.created_at)}</td>
           <td>
@@ -1832,7 +1869,7 @@
               <button class="btn" onclick="selectProfileForInspection('${p.profile_id}')">Select</button>
               <button class="btn" onclick="uploadReferenceForProfile('${p.profile_id}')" title="Upload or Replace Reference Photograph">
                 <svg viewBox="0 0 24 24" style="width:13px; height:13px; vertical-align:middle; margin-right:3px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                <span>${(p.reference_image_id || isPerm) ? 'Update Ref' : 'Upload Ref'}</span>
+                <span>${hasRef ? 'Update Ref' : 'Upload Ref'}</span>
               </button>
               ${!isPerm && p.reference_image_id ? `
                 <button class="btn" onclick="deleteReferenceForProfile('${p.profile_id}')" title="Delete Reference Image" style="color:var(--reject); border-color:rgba(239, 68, 68, 0.4);">
@@ -1869,12 +1906,15 @@
       const btnDelete = document.getElementById('btnRefDelete');
       const btnUploadText = document.getElementById('btnRefUploadText');
       const isPerm = isProtectedProfile(currentProfile.profile_id);
+      const hasRef = profileHasReference(currentProfile);
 
-      if (currentProfile.reference_image_id || isPerm) {
+      if (hasRef) {
         if (btnZoom) btnZoom.style.display = 'inline-flex';
         // Permanent standard baselines cannot be deleted
         if (btnDelete) btnDelete.style.display = isPerm ? 'none' : 'inline-flex';
         if (btnUploadText) btnUploadText.innerText = 'Update Reference';
+
+        const targetUrl = `/profiles/${currentProfile.profile_id}/reference-image?v=${currentProfile.version}`;
 
         refImg.onload = () => {
           refImg.style.display = 'block';
@@ -1888,12 +1928,16 @@
           }
         };
 
-        const targetUrl = `/profiles/${currentProfile.profile_id}/reference-image?t=${Date.now()}`;
-        refImg.src = targetUrl;
-        if (refImg.complete && refImg.naturalWidth > 0) {
+        // If preloaded image already finished loading in memory, display instantly without flicker
+        const preloaded = _refImagePreloadCache.get(targetUrl);
+        if (preloaded && preloaded.complete && preloaded.naturalWidth > 0) {
+          refImg.src = targetUrl;
           refImg.style.display = 'block';
           refPlaceholder.style.display = 'none';
+        } else {
+          refImg.src = targetUrl;
         }
+
         refSubtitle.innerText = isPerm
           ? `Standard Golden Reference (v${currentProfile.version}) — Permanent Baseline`
           : `Approved Golden Reference (v${currentProfile.version})`;
@@ -2427,6 +2471,12 @@
             throw new Error(errData.detail || 'Failed to upload reference');
           }
           const updated = await res.json();
+          // Preload updated reference image immediately
+          const newUrl = `/profiles/${profileId}/reference-image?v=${updated.version}`;
+          const newImg = new Image();
+          newImg.src = newUrl;
+          _refImagePreloadCache.set(newUrl, newImg);
+
           const idx = profilesList.findIndex(p => p.profile_id === profileId);
           if (idx !== -1) {
             profilesList[idx] = updated;

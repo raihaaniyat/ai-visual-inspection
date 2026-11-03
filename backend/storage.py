@@ -52,6 +52,42 @@ PERMANENT_PROFILE_IDS = {
 }
 
 
+def load_library_image(filename: str) -> Image.Image | None:
+    """Loads a reference library image from version-controlled storage."""
+    base_dir = Path(__file__).resolve().parent
+    search_paths = [
+        base_dir / "data" / "reference_library" / filename,
+        base_dir.parent / "backend" / "data" / "reference_library" / filename,
+        base_dir.parent / "public" / "reference_library" / filename,
+        base_dir.parent / filename,
+    ]
+    for p in search_paths:
+        if p.exists():
+            try:
+                return ImageOps.exif_transpose(Image.open(p)).convert("RGB")
+            except Exception:
+                pass
+    return None
+
+
+def resolve_standard_reference_filename(profile_id: str, name: str = "") -> str | None:
+    """Maps a profile ID or name to its canonical library reference filename."""
+    name_lower = (name or "").lower()
+    if profile_id == "prof_speaker" or "speaker" in name_lower:
+        return "speaker.png"
+    if profile_id == "prof_transistor" or "transistor" in name_lower:
+        return "transistor.png"
+    if profile_id == "prof_screws_plywood" or "screw" in name_lower or "plywood" in name_lower:
+        return "screws_plywood.jpg"
+    if profile_id == "prof_cable_assembly" or "cable" in name_lower or "wire" in name_lower:
+        return "cable_assembly.png"
+    if profile_id == "prof_zipper" or "zipper" in name_lower:
+        return "zipper.png"
+    if profile_id in ("prof_physical_6screw", "prof_general_inspection"):
+        return "screws_plywood.jpg"
+    return None
+
+
 def _get_db_path() -> Path:
     return settings.storage_dir_path / "inspector.db"
 
@@ -719,6 +755,21 @@ def get_profile(profile_id: str) -> ProfileResponse | None:
         row = cursor.fetchone()
         if row:
             pid, name, desc, ver, ref_id, corners_j, cl_json, reg_json, created, updated = row
+            # Auto-heal missing reference if standard profile or named after standard
+            if not ref_id:
+                lib_fn = resolve_standard_reference_filename(pid, name)
+                if lib_fn:
+                    lib_img = load_library_image(lib_fn)
+                    if lib_img:
+                        ref_id = save_image_file(lib_img, prefix="ref")
+                        try:
+                            cursor.execute(
+                                "UPDATE profiles SET reference_image_id = ? WHERE profile_id = ?",
+                                (ref_id, pid),
+                            )
+                            conn.commit()
+                        except Exception:
+                            pass
             corners = WorkpieceCorners(**json.loads(corners_j)) if corners_j else None
             return ProfileResponse(
                 profile_id=pid,
@@ -754,6 +805,13 @@ def get_profile(profile_id: str) -> ProfileResponse | None:
                 reg_json = p.get("regions_json") or "[]"
                 created = p.get("created_at")
                 updated = p.get("updated_at")
+
+                if not ref_id:
+                    lib_fn = resolve_standard_reference_filename(pid, name)
+                    if lib_fn:
+                        lib_img = load_library_image(lib_fn)
+                        if lib_img:
+                            ref_id = save_image_file(lib_img, prefix="ref")
 
                 with sqlite3.connect(db_path) as conn:
                     cursor = conn.cursor()
@@ -837,6 +895,22 @@ def list_profiles() -> list[ProfileResponse]:
     profiles = []
     for row in rows:
         pid, name, desc, ver, ref_id, corners_j, cl_json, reg_json, created, updated = row
+        # Auto-heal missing references for standard profiles or profiles named after standard items
+        if not ref_id:
+            lib_fn = resolve_standard_reference_filename(pid, name)
+            if lib_fn:
+                lib_img = load_library_image(lib_fn)
+                if lib_img:
+                    ref_id = save_image_file(lib_img, prefix="ref")
+                    try:
+                        with sqlite3.connect(db_path) as conn:
+                            conn.cursor().execute(
+                                "UPDATE profiles SET reference_image_id = ? WHERE profile_id = ?",
+                                (ref_id, pid),
+                            )
+                            conn.commit()
+                    except Exception:
+                        pass
         corners = WorkpieceCorners(**json.loads(corners_j)) if corners_j else None
         profiles.append(
             ProfileResponse(
@@ -852,6 +926,31 @@ def list_profiles() -> list[ProfileResponse]:
                 updated_at=updated,
             )
         )
+
+    # Sort standard profiles to the top in canonical order
+    canonical_order = [
+        "prof_speaker",
+        "prof_transistor",
+        "prof_screws_plywood",
+        "prof_cable_assembly",
+        "prof_zipper",
+        "prof_physical_6screw",
+        "prof_general_inspection",
+    ]
+    def _sort_key(prof: ProfileResponse):
+        if prof.profile_id in canonical_order:
+            return (0, canonical_order.index(prof.profile_id))
+        name_lower = (prof.name or "").lower()
+        if "speaker" in name_lower:
+            return (1, 0)
+        if "transistor" in name_lower:
+            return (1, 1)
+        if "screw" in name_lower or "plywood" in name_lower:
+            return (1, 2)
+        return (2, prof.created_at or "")
+
+    profiles.sort(key=_sort_key)
+    return profiles
     return profiles
 
 

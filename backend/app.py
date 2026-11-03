@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import base64
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -425,11 +426,13 @@ async def upload_profile_reference(
         except Exception as exc:
             raise HTTPException(400, f"Invalid workpiece corners JSON: {exc}")
 
-    return update_profile_reference(
+    res = update_profile_reference(
         profile_id=profile_id,
         reference_image=ref_image,
         reference_corners=corners,
     )
+    _invalidate_reference_cache(profile_id)
+    return res
 
 
 @app.delete("/profiles/{profile_id}/reference", response_model=ProfileResponse)
@@ -441,7 +444,9 @@ def delete_profile_reference(profile_id: str) -> ProfileResponse:
     profile = get_profile(profile_id)
     if not profile:
         raise HTTPException(404, f"Profile '{profile_id}' not found.")
-    return remove_profile_reference(profile_id)
+    res = remove_profile_reference(profile_id)
+    _invalidate_reference_cache(profile_id)
+    return res
 
 
 @app.post("/profiles/{profile_id}/config", response_model=ProfileResponse)
@@ -602,7 +607,9 @@ def delete_all_profile_references() -> dict:
     Deletes all approved reference images and regions across all profiles,
     and purges all stored inspection audit history.
     """
-    return delete_all_references()
+    res = delete_all_references()
+    _invalidate_reference_cache()
+    return res
 
 
 @app.delete("/profiles/{profile_id}")
@@ -610,21 +617,76 @@ def remove_profile(profile_id: str) -> dict:
     ok = delete_profile(profile_id)
     if not ok:
         raise HTTPException(404, f"Profile '{profile_id}' not found.")
+    _invalidate_reference_cache(profile_id)
     return {"status": "deleted", "profile_id": profile_id}
 
 
+# In-memory JPEG byte and ETag cache to accelerate reference image serving
+_REFERENCE_JPEG_CACHE: dict[str, tuple[bytes, str]] = {}
+
+
+def _invalidate_reference_cache(profile_id: str | None = None) -> None:
+    global _REFERENCE_JPEG_CACHE
+    if profile_id:
+        keys_to_del = [k for k in _REFERENCE_JPEG_CACHE if k.startswith(f"{profile_id}_")]
+        for k in keys_to_del:
+            _REFERENCE_JPEG_CACHE.pop(k, None)
+    else:
+        _REFERENCE_JPEG_CACHE.clear()
+
+
+def _get_precompressed_library_jpeg(filename: str) -> tuple[bytes, str] | None:
+    img = _load_library_image(filename)
+    if not img:
+        return None
+    disp = img.copy()
+    if max(disp.size) > 1400:
+        disp.thumbnail((1400, 1400), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    disp.convert("RGB").save(buf, format="JPEG", quality=85)
+    data = buf.getvalue()
+    etag = f'"{hashlib.md5(data).hexdigest()}"'
+    return data, etag
+
+
 @app.get("/profiles/{profile_id}/reference-image")
-def get_profile_reference_image(profile_id: str):
+def get_profile_reference_image(
+    profile_id: str,
+    request: Request,
+    v: int | None = None,
+):
     profile = get_profile(profile_id)
     if not profile:
         raise HTTPException(404, f"Profile '{profile_id}' not found.")
+
+    cache_key = f"{profile_id}_v{profile.version}"
+    if cache_key in _REFERENCE_JPEG_CACHE:
+        cached_bytes, etag = _REFERENCE_JPEG_CACHE[cache_key]
+        if_none_match = request.headers.get("if-none-match")
+        if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+            return Response(
+                status_code=304,
+                headers={
+                    "ETag": etag,
+                    "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+                },
+            )
+        return Response(
+            content=cached_bytes,
+            media_type="image/jpeg",
+            headers={
+                "ETag": etag,
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+                "Content-Length": str(len(cached_bytes)),
+            },
+        )
 
     img = None
     if profile.reference_image_id:
         img = load_image_file(profile.reference_image_id)
 
     # Automatic durable fallback for permanent library profiles
-    if not img and profile.profile_id in PERMANENT_PROFILE_IDS:
+    if not img:
         img_name_map = {
             "prof_speaker": "speaker.png",
             "prof_transistor": "transistor.png",
@@ -635,24 +697,74 @@ def get_profile_reference_image(profile_id: str):
             "prof_general_inspection": "screws_plywood.jpg",
         }
         filename = img_name_map.get(profile.profile_id)
+        if not filename:
+            name_lower = (profile.name or "").lower()
+            if "speaker" in name_lower:
+                filename = "speaker.png"
+            elif "transistor" in name_lower:
+                filename = "transistor.png"
+            elif "screw" in name_lower or "plywood" in name_lower:
+                filename = "screws_plywood.jpg"
+            elif "cable" in name_lower or "wire" in name_lower:
+                filename = "cable_assembly.png"
+            elif "zipper" in name_lower:
+                filename = "zipper.png"
+
         if filename:
+            cached_pair = _get_precompressed_library_jpeg(filename)
+            if cached_pair:
+                img_bytes, etag = cached_pair
+                _REFERENCE_JPEG_CACHE[cache_key] = cached_pair
+                if_none_match = request.headers.get("if-none-match")
+                if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+                    return Response(
+                        status_code=304,
+                        headers={
+                            "ETag": etag,
+                            "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+                        },
+                    )
+                return Response(
+                    content=img_bytes,
+                    media_type="image/jpeg",
+                    headers={
+                        "ETag": etag,
+                        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+                        "Content-Length": str(len(img_bytes)),
+                    },
+                )
             img = _load_library_image(filename)
 
     if not img:
         raise HTTPException(404, "No approved reference image has been uploaded for this profile yet.")
 
     disp_img = img.copy()
-    if max(disp_img.size) > 1600:
-        disp_img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    if max(disp_img.size) > 1400:
+        disp_img.thumbnail((1400, 1400), Image.Resampling.BILINEAR)
 
     buf = io.BytesIO()
-    disp_img.convert("RGB").save(buf, format="JPEG", quality=90, optimize=True)
+    disp_img.convert("RGB").save(buf, format="JPEG", quality=85)
     img_bytes = buf.getvalue()
+    etag = f'"{hashlib.md5(img_bytes).hexdigest()}"'
+
+    _REFERENCE_JPEG_CACHE[cache_key] = (img_bytes, etag)
+
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match.strip('"') == etag.strip('"'):
+        return Response(
+            status_code=304,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+            },
+        )
+
     return Response(
         content=img_bytes,
         media_type="image/jpeg",
         headers={
-            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "ETag": etag,
+            "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
             "Content-Length": str(len(img_bytes)),
         },
     )
